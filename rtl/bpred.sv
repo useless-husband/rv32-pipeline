@@ -6,10 +6,16 @@
 // predicted taken when its counter is 2 or 3.  Otherwise: not taken.
 // Update (EX, when a branch or jump resolves): counters move toward the
 // outcome; taken branches and all jumps (re)write their BTB entry.
+// Returns (JALR with rs1 = ra/t0 and rd not a link register) are predicted
+// from a return-address stack (RAS) of RAS_DEPTH entries: calls (JAL/JALR
+// writing ra/t0) push pc+4 and returns pop, both when they resolve in EX, so
+// the stack only ever holds non-speculative entries.  RAS_DEPTH=0 removes it
+// (returns then use the BTB's last target).
 // ENABLE=0 turns it into "always predict not taken", for comparison.
 module bpred #(
-    parameter int BTB_ENTRIES = 32,   // power of two
+    parameter int BTB_ENTRIES = 128,   // power of two
     parameter int BHT_ENTRIES = 256,  // power of two
+    parameter int RAS_DEPTH = 8,      // 0 or a power of two
     parameter bit ENABLE = 1'b1
 ) (
     input  logic        clk,
@@ -20,6 +26,8 @@ module bpred #(
     input  logic        upd_valid,
     input  logic        upd_branch,    // conditional branch
     input  logic        upd_jump,      // JAL or JALR
+    input  logic        upd_call,      // JAL/JALR that writes ra or t0
+    input  logic        upd_ret,       // JALR from ra or t0 that is not a call
     input  logic [31:0] upd_pc,
     input  logic        upd_taken,
     input  logic [31:0] upd_target
@@ -30,6 +38,7 @@ module bpred #(
 
     logic          btb_valid [0:BTB_ENTRIES-1];
     logic          btb_jump  [0:BTB_ENTRIES-1];
+    logic          btb_ret   [0:BTB_ENTRIES-1];
     logic [TW-1:0] btb_tag   [0:BTB_ENTRIES-1];
     logic [29:0]   btb_tgt   [0:BTB_ENTRIES-1];
     logic [1:0]    bht       [0:BHT_ENTRIES-1];
@@ -45,7 +54,32 @@ module bpred #(
 
     assign hit = btb_valid[li] && btb_tag[li] == pc[31:2+BI];
     assign pred_taken = ENABLE && hit && (btb_jump[li] || bht[lh][1]);
-    assign pred_target = {btb_tgt[li], 2'b00};
+
+    // return-address stack
+    localparam int RW = (RAS_DEPTH > 1) ? $clog2(RAS_DEPTH) : 1;
+    logic [29:0]   ras [0:(RAS_DEPTH > 0 ? RAS_DEPTH : 1)-1];
+    logic [RW-1:0] ras_top;           // index of the newest entry
+    logic [RW:0]   ras_count;
+    logic          use_ras;
+
+    assign use_ras = (RAS_DEPTH > 0) && btb_ret[li] && ras_count != '0;
+    assign pred_target = use_ras ? {ras[ras_top], 2'b00} : {btb_tgt[li], 2'b00};
+
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            ras_top <= '0;
+            ras_count <= '0;
+        end else if (RAS_DEPTH > 0 && upd_valid) begin
+            if (upd_call) begin
+                ras[ras_top + 1'b1] <= upd_pc[31:2] + 30'd1;
+                ras_top <= ras_top + 1'b1;
+                if (ras_count != (RW+1)'(RAS_DEPTH)) ras_count <= ras_count + 1'b1;
+            end else if (upd_ret && ras_count != '0) begin
+                ras_top <= ras_top - 1'b1;
+                ras_count <= ras_count - 1'b1;
+            end
+        end
+    end
 
     always_ff @(posedge clk) begin
         if (rst) begin
@@ -59,6 +93,7 @@ module bpred #(
             if (upd_taken && (upd_branch || upd_jump)) begin
                 btb_valid[ui] <= 1'b1;
                 btb_jump[ui] <= upd_jump;
+                btb_ret[ui] <= upd_ret && !upd_call;
                 btb_tag[ui] <= upd_pc[31:2+BI];
                 btb_tgt[ui] <= upd_target[31:2];
             end

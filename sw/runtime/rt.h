@@ -3,10 +3,12 @@
 #ifndef RT_H
 #define RT_H
 
+#include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
 
 int printf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+int vprintf(const char *fmt, va_list ap);
 int putchar(int c);
 int puts(const char *s);
 void exit(int code) __attribute__((noreturn));

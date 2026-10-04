@@ -176,14 +176,18 @@ class Gen:
             self.emit(f"csrr x{self.dst()}, {self.r.choice(['mcycle', 'cycle', 'mhpmcounter5', 'instreth'])}")
         elif k < 0.8:
             op = self.r.choice(["csrrw", "csrrs", "csrrc"])
-            self.emit(f"{op} x{self.dst()}, mscratch, x{self.src()}")
+            # mepc/mcause/mtval are free to use: the trap handler rewrites them
+            csr = self.r.choice(["mscratch", "mscratch", "mepc", "mcause", "mtval"])
+            self.emit(f"{op} x{self.dst()}, {csr}, x{self.src()}")
         else:
             op = self.r.choice(["csrrwi", "csrrsi", "csrrci"])
             self.emit(f"{op} x{self.dst()}, mscratch, {self.r.randint(0, 31)}")
 
     def trap(self):
         self.emit(self.r.choice(["ecall", "ebreak", ".word 0x00000000", ".word 0xffffffff",
-                                 "csrw cycle, x1", "csrr x5, 0x7c0", ".word 0x02000033 | (1 << 30)"]))
+                                 "csrw cycle, x1", "csrr x5, 0x7c0", ".word 0x02000033 | (1 << 30)",
+                                 ".word 0x00002063  # branch with reserved funct3",
+                                 ".word 0x00003003  # LD (RV64 only)"]))
 
     def io(self):
         self.emit(f"li x29, {0x10000000}")

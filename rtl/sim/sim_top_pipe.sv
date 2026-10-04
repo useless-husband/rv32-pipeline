@@ -7,8 +7,9 @@ module sim_top_pipe #(
     parameter int MEM_LATENCY = 10,
     parameter int ICACHE_SETS = 256,
     parameter int DCACHE_SETS = 128,
-    parameter int BTB_ENTRIES = 32,
+    parameter int BTB_ENTRIES = 128,
     parameter int BHT_ENTRIES = 256,
+    parameter int RAS_DEPTH = 8,
     parameter bit BP_ENABLE = 1'b1
 ) (
     input  logic        clk,
@@ -49,7 +50,7 @@ module sim_top_pipe #(
     logic [15:0]  bus_wstrb;
 
     core_pipe #(.ICACHE_SETS(ICACHE_SETS), .DCACHE_SETS(DCACHE_SETS), .BTB_ENTRIES(BTB_ENTRIES),
-                .BHT_ENTRIES(BHT_ENTRIES), .BP_ENABLE(BP_ENABLE)) u_core (
+                .BHT_ENTRIES(BHT_ENTRIES), .RAS_DEPTH(RAS_DEPTH), .BP_ENABLE(BP_ENABLE)) u_core (
         .clk(clk), .rst(rst),
         .bus_req(bus_req), .bus_we(bus_we), .bus_addr(bus_addr), .bus_wdata(bus_wdata),
         .bus_wstrb(bus_wstrb), .bus_ack(bus_ack), .bus_rdata(bus_rdata),

@@ -2,8 +2,6 @@
  * register, exit() writes the EXIT register. */
 #include "rt.h"
 
-#include <stdarg.h>
-
 #include "rv_platform.h"
 
 #define CONSOLE (*(volatile uint32_t *)RV_MMIO_CONSOLE)
@@ -157,7 +155,7 @@ static void out_num(uint64_t v, unsigned base, int upper, int width, char pad, i
         putchar(buf[--n]);
 }
 
-static int vprintf_(const char *f, va_list ap)
+int vprintf(const char *f, va_list ap)
 {
     for (; *f; f++) {
         if (*f != '%') {
@@ -216,7 +214,7 @@ int printf(const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    vprintf_(fmt, ap);
+    vprintf(fmt, ap);
     va_end(ap);
     return 0;
 }
@@ -252,8 +250,9 @@ void rt_stats_end(const char *label)
     for (int i = 0; i < RV_HPM_COUNT; i++)
         h[i] = rt_hpm(RV_HPM_FIRST + i) - h0[i];
     uint64_t cpi1000 = n ? (c * 1000 + n / 2) / n : 0;
-    printf("[%s] cycles=%llu instret=%llu CPI=%u.%03u\n", label, (unsigned long long)c,
-           (unsigned long long)n, (unsigned)(cpi1000 / 1000), (unsigned)(cpi1000 % 1000));
+    printf("[%s] cycles=%llu instret=%llu CPI=%u.%03u\n[%s]", label, (unsigned long long)c,
+           (unsigned long long)n, (unsigned)(cpi1000 / 1000), (unsigned)(cpi1000 % 1000), label);
     for (int i = 0; i < RV_HPM_COUNT; i++)
-        printf("[%s]   %-20s %u\n", label, names[i], (unsigned)h[i]);
+        printf(" %s=%u", names[i], (unsigned)h[i]);
+    putchar('\n');
 }

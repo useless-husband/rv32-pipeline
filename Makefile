@@ -56,7 +56,7 @@ build/sw/%.elf: sw/demo/%.c $(RT_OBJ) sw/runtime/link.ld
 	$(CLANG) $(RVCFLAGS) -c -o build/sw/$*.o $<
 	$(LLD) $(RVLDFLAGS) -o $@ $(RT_OBJ) build/sw/$*.o
 
-sw: build/sw/hello.elf
+sw: build/sw/hello.elf build/sw/demo.elf
 
 clean:
 	rm -rf build
@@ -152,7 +152,7 @@ unit: check-python
 SIMS := build/vsim_single build/vsim_pipe
 PYENV := CLANG="$(CLANG)" LLD="$(LLD)"
 
-system: check-python $(SIMS) rvtests sw
+system: check-python $(SIMS) rvtests sw benchmarks
 	rm -rf build/random
 	$(PYENV) $(PYTHON) -m pytest -q tests/system
 
@@ -172,3 +172,36 @@ test: lint iss-test unit system
 venv:
 	python3 -m venv $(VENV)
 	$(VENV)/bin/pip install -q -r requirements-dev.txt
+
+# ------------------------------------------------------------ benchmarks
+# CoreMark and Dhrystone are fetched at build time, unmodified; only the
+# port layer (sw/bench) is ours.  Neither result is an official score: see
+# docs/report.md section 7 for how they differ from the run rules.
+COREMARK_ITER ?= 10
+CM_SRC := core_list_join.c core_main.c core_matrix.c core_state.c core_util.c
+CM_FLAGS := $(RVCFLAGS) -Isw/bench/coremark -I$(TP)/coremark -DPERFORMANCE_RUN=1 \
+            -DITERATIONS=$(COREMARK_ITER) -DFLAGS_STR='"-O2 (clang, rv32im)"'
+
+$(TP)/coremark/.stamp:
+	rm -rf $(TP)/coremark && mkdir -p $(TP)/coremark
+	cd $(TP)/coremark && git init -q && git fetch -q --depth 1 $(COREMARK_URL) $(COREMARK_SHA) \
+	  && git checkout -q FETCH_HEAD
+	@touch $@
+
+build/sw/coremark.elf: $(TP)/coremark/.stamp sw/bench/coremark/core_portme.c sw/bench/coremark/core_portme.h $(RT_OBJ)
+	@mkdir -p build/sw/coremark
+	for f in $(CM_SRC); do $(CLANG) $(CM_FLAGS) -c -o build/sw/coremark/$${f%.c}.o $(TP)/coremark/$$f || exit 1; done
+	$(CLANG) $(CM_FLAGS) -c -o build/sw/coremark/core_portme.o sw/bench/coremark/core_portme.c
+	$(LLD) $(RVLDFLAGS) -o $@ $(RT_OBJ) build/sw/coremark/*.o
+
+DHRY_FLAGS := $(RVCFLAGS) -std=gnu89 -Isw/bench/include -Wno-implicit-int -Wno-implicit-function-declaration \
+              -Wno-return-type -Wno-strict-prototypes -Wno-deprecated-non-prototype
+
+build/sw/dhrystone.elf: $(TP)/riscv-tests/.stamp sw/bench/bench_support.c sw/bench/include/util.h $(RT_OBJ)
+	@mkdir -p build/sw/dhrystone
+	$(CLANG) $(DHRY_FLAGS) -c -o build/sw/dhrystone/dhrystone.o $(TP)/riscv-tests/benchmarks/dhrystone/dhrystone.c
+	$(CLANG) $(DHRY_FLAGS) -c -o build/sw/dhrystone/dhrystone_main.o $(TP)/riscv-tests/benchmarks/dhrystone/dhrystone_main.c
+	$(CLANG) $(RVCFLAGS) -Isw/bench/include -c -o build/sw/dhrystone/bench_support.o sw/bench/bench_support.c
+	$(LLD) $(RVLDFLAGS) -o $@ $(RT_OBJ) build/sw/dhrystone/*.o
+
+benchmarks: build/sw/coremark.elf build/sw/dhrystone.elf

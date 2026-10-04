@@ -18,8 +18,9 @@
 module core_pipe #(
     parameter int  ICACHE_SETS = 256,   // 4 KiB direct mapped
     parameter int  DCACHE_SETS = 128,   // 4 KiB, 2 ways
-    parameter int  BTB_ENTRIES = 32,
+    parameter int  BTB_ENTRIES = 128,
     parameter int  BHT_ENTRIES = 256,
+    parameter int  RAS_DEPTH   = 8,
     parameter bit  BP_ENABLE   = 1'b1
 ) (
     input  logic         clk,
@@ -465,9 +466,16 @@ module core_pipe #(
         .bus_wstrb(bus_wstrb), .bus_ack(bus_ack));
 
     // ========================================================= predictor
-    bpred #(.BTB_ENTRIES(BTB_ENTRIES), .BHT_ENTRIES(BHT_ENTRIES), .ENABLE(BP_ENABLE)) u_bp (
+    // calls and returns, by the register-use hints of the ISA (ra = x1, t0 = x5)
+    logic rd_link, rs1_link;
+    assign rd_link = (e_rd == 5'd1) || (e_rd == 5'd5);
+    assign rs1_link = (e_rs1 == 5'd1) || (e_rs1 == 5'd5);
+
+    bpred #(.BTB_ENTRIES(BTB_ENTRIES), .BHT_ENTRIES(BHT_ENTRIES), .RAS_DEPTH(RAS_DEPTH),
+            .ENABLE(BP_ENABLE)) u_bp (
         .clk(clk), .rst(rst), .pc(pc_f), .pred_taken(bp_taken), .pred_target(bp_target),
         .upd_valid(e_fire && !e_exc), .upd_branch(e_is_branch), .upd_jump(e_is_jal || e_is_jalr),
+        .upd_call((e_is_jal || e_is_jalr) && rd_link), .upd_ret(e_is_jalr && rs1_link && !rd_link),
         .upd_pc(e_pc), .upd_taken(jumps), .upd_target(target));
 
     // ==================================================== perf counters

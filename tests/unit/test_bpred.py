@@ -39,19 +39,20 @@ class Model:
 async def reset(dut):
     cocotb.start_soon(Clock(dut.clk, 10, unit="ns").start())
     dut.rst.value, dut.upd_valid.value, dut.pc.value = 1, 0, 0
-    for name in ("upd_branch", "upd_jump", "upd_pc", "upd_taken", "upd_target"):
+    for name in ("upd_branch", "upd_jump", "upd_call", "upd_ret", "upd_pc", "upd_taken", "upd_target"):
         getattr(dut, name).value = 0
     await RisingEdge(dut.clk)
     await FallingEdge(dut.clk)
     dut.rst.value = 0
 
 
-async def update(dut, pc, branch, jump, taken, target):
+async def update(dut, pc, branch, jump, taken, target, call=0, ret=0):
     dut.upd_valid.value, dut.upd_pc.value, dut.upd_branch.value = 1, pc, int(branch)
     dut.upd_jump.value, dut.upd_taken.value, dut.upd_target.value = int(jump), int(taken), target
+    dut.upd_call.value, dut.upd_ret.value = call, ret
     await RisingEdge(dut.clk)
     await FallingEdge(dut.clk)
-    dut.upd_valid.value = 0
+    dut.upd_valid.value = dut.upd_call.value = dut.upd_ret.value = 0
 
 
 async def predict(dut, pc):
@@ -82,6 +83,27 @@ async def directed(dut):
     # same BTB index, different tag: no prediction
     alias = 0x80000200 + BTB * 4 * 1024
     assert (await predict(dut, alias))[0] == 0
+
+
+@cocotb.test()
+async def return_stack(dut):
+    """Nested calls from different sites: each return is predicted to its own
+    call site's pc+4 (the BTB alone would give the last target); with the
+    stack empty the BTB target is used."""
+    if not int(os.environ.get("BP_ENABLE", "1")):
+        return
+    await reset(dut)
+    ret_pc = 0x80001000                              # the callee's RET (BTB index 0)
+    sites = [0x80000104, 0x80000208, 0x8000030C]     # call sites (BTB indexes 1, 2, 3)
+    await update(dut, ret_pc, 0, 1, 1, 0x80000044, ret=1)   # BTB learns: a return
+    for s in sites:
+        await update(dut, s, 0, 1, 1, 0x80000F00, call=1)   # nested calls push s+4
+    for s in reversed(sites):
+        taken, target = await predict(dut, ret_pc)
+        assert taken == 1 and target == s + 4, f"return predicted to {target:#x}, want {s + 4:#x}"
+        await update(dut, ret_pc, 0, 1, 1, s + 4, ret=1)    # resolves: pop
+    taken, target = await predict(dut, ret_pc)
+    assert taken == 1 and target == sites[0] + 4, "empty stack: BTB target"
 
 
 @cocotb.test()
