@@ -70,7 +70,7 @@ CoreMark® 是 EEMBC® 的註冊商標。這個專案只是把未修改的 CoreM
 放在模擬器裡跑；上面的數字是模擬出來的週期數，不是 CoreMark 分數，也沒有經過 EEMBC 認證或送審。
 
 合成到 XC7S50（`make synth`，[synth/report.md](synth/report.md)）：
-核心 A 4,190 LUT、960 個正反器、4 個 DSP48E1；核心 B 9,344 LUT、3,759 個正反器、
+核心 A 4,190 LUT、960 個正反器、4 個 DSP48E1；核心 B 9,305 LUT、3,759 個正反器、
 6.5 個 block RAM、4 個 DSP48E1（佔晶片 LUT 的 27%）。
 
 ## 示範

@@ -3,7 +3,9 @@ correct but no longer does its job passes every lockstep test, so the
 pipelined core's CoreMark run must also stay within these bounds.  Measured
 with clang 23 (10 iterations, whole run): CPI 1.19, 8.4 % of conditional
 branches and 3.0 % of jumps mispredicted, I-cache misses 0.16 %, D-cache
-misses 0.04 %; the limits leave room for other compiler versions."""
+misses 0.04 %; the limits leave room for small codegen changes.  Much older
+clang releases generate different code (LLVM 18 emits ~1.7x as many jumps and
+fails the jump bound), so CI pins LLVM 23."""
 
 import json
 

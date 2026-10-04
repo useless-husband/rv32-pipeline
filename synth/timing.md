@@ -8,5 +8,5 @@ Path end: `\u_core.u_rf.wd [29]`. Cells on the path: 275 CARRY4, 29 LUT4, 4 LUT6
 
 ## Core B: 7.8 ns
 
-Path end: `\u_core.e_result [30]`. Cells on the path: 12 CARRY4, 2 FDRE, 2 LUT6, 2 DSP48E1, 1 LUT2, 1 LUT5, 1 LUT4, 1 BUFG, 1 IBUF.
+Path end: `\u_core.e_result [29]`. Cells on the path: 12 CARRY4, 2 FDRE, 2 LUT5, 2 DSP48E1, 2 LUT6, 1 LUT2, 1 BUFG, 1 IBUF.
 

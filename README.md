@@ -96,7 +96,7 @@ simulated cycle counts, not CoreMark scores, and are not certified by or
 submitted to EEMBC.
 
 Synthesis for the XC7S50 (`make synth`, [synth/report.md](synth/report.md)):
-core A 4,190 LUTs, 960 flip-flops, 4 DSP48E1; core B 9,344 LUTs, 3,759
+core A 4,190 LUTs, 960 flip-flops, 4 DSP48E1; core B 9,305 LUTs, 3,759
 flip-flops, 6.5 block RAMs, 4 DSP48E1 (27 % of the chip's LUTs).
 
 ## Demo

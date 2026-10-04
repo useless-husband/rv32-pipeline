@@ -41,7 +41,9 @@ module bpred #(
     logic          btb_ret   [0:BTB_ENTRIES-1];
     logic [TW-1:0] btb_tag   [0:BTB_ENTRIES-1];
     logic [29:0]   btb_tgt   [0:BTB_ENTRIES-1];
-    logic [BHT_ENTRIES-1:0][1:0] bht;         // packed too: Verilator 5.020 rejects <= to arrays in loops
+    logic [2*BHT_ENTRIES-1:0]    bht;         // 2-bit counter i at bht[2*i +: 2]; kept flat
+                                              // because the old tools in CI (Verilator 5.020,
+                                              // Yosys 0.33) reject the array forms
 
     logic [BI-1:0] li, ui;
     logic [HI-1:0] lh, uh;
@@ -54,7 +56,7 @@ module bpred #(
 
     assign hit = btb_valid[li] && btb_tag[li] == pc[31:2+BI];
     logic [1:0] bht_l;                // read the counter first: Icarus cannot
-    assign bht_l = bht[lh];           // bit-select a variable-indexed packed element
+    assign bht_l = bht[2*lh +: 2];    // bit-select a variable-indexed part-select
     assign pred_taken = ENABLE && hit && (btb_jump[li] || bht_l[1]);
 
     // return-address stack
@@ -90,8 +92,8 @@ module bpred #(
             bht <= {BHT_ENTRIES{2'b01}};  // weakly not taken
         end else if (upd_valid) begin
             if (upd_branch) begin
-                if (upd_taken && bht[uh] != 2'b11) bht[uh] <= bht[uh] + 2'b01;
-                if (!upd_taken && bht[uh] != 2'b00) bht[uh] <= bht[uh] - 2'b01;
+                if (upd_taken && bht[2*uh +: 2] != 2'b11) bht[2*uh +: 2] <= bht[2*uh +: 2] + 2'b01;
+                if (!upd_taken && bht[2*uh +: 2] != 2'b00) bht[2*uh +: 2] <= bht[2*uh +: 2] - 2'b01;
             end
             if (upd_taken && (upd_branch || upd_jump)) begin
                 btb_valid[ui] <= 1'b1;

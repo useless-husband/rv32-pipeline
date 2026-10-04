@@ -288,7 +288,7 @@ do not count.
 | | LUTs | Flip-flops | Block RAM (36 Kb) | DSP48E1 |
 |---|---:|---:|---:|---:|
 | Core A | 4,190 (12.9 %) | 960 | 0 | 4 |
-| Core B | 9,344 (28.7 %) | 3,759 | 6.5 | 4 |
+| Core B | 9,305 (28.5 %) | 3,759 | 6.5 | 4 |
 
 In core B the D-cache is the largest block (about 3,100 LUTs: 128-bit line
 multiplexers for two ways, the store bypass and the write-back buffer),
