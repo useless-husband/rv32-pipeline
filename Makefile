@@ -119,6 +119,7 @@ build/iss/%.o: model/%.c model/rv_iss.h model/rv_platform.h
 
 build/vsim_single: $(SIM_SINGLE) rtl/rv_defs.svh sim/sim_main.cpp build/iss/rv_iss.o build/iss/disasm.o
 	rm -rf build/vm_single
+	mkdir -p build/vm_single
 	$(VERILATOR) $(VFLAGS) -Mdir build/vm_single --top-module sim_top_single $(SIM_SINGLE)
 	$(call VSIM_CXX,vm_single) -o $@ -lpthread
 
@@ -130,6 +131,7 @@ PIPE_G ?=
 
 build/vsim_pipe: $(SIM_PIPE) rtl/rv_defs.svh sim/sim_main.cpp sim/pipeview.inc build/iss/rv_iss.o build/iss/disasm.o
 	rm -rf build/vm_pipe
+	mkdir -p build/vm_pipe
 	$(VERILATOR) $(VFLAGS) -Mdir build/vm_pipe --top-module sim_top_pipe $(PIPE_G) $(SIM_PIPE)
 	$(call VSIM_CXX,vm_pipe) -DHAVE_PIPEVIEW -o $@ -lpthread
 
@@ -225,6 +227,7 @@ VARIANTS := nobp noras ic8k lat1 lat30
 
 build/vsim_pipe-%: $(SIM_PIPE) rtl/rv_defs.svh sim/sim_main.cpp sim/pipeview.inc build/iss/rv_iss.o build/iss/disasm.o
 	rm -rf build/vm_pipe-$*
+	mkdir -p build/vm_pipe-$*
 	$(VERILATOR) $(VFLAGS) -Mdir build/vm_pipe-$* --top-module sim_top_pipe $(G_$*) $(SIM_PIPE)
 	$(call VSIM_CXX,vm_pipe-$*) -DHAVE_PIPEVIEW -o $@ -lpthread
 

@@ -73,14 +73,15 @@ def main():
          f"Host: {platform.machine()}, {platform.system()} {platform.release()}; simulator: Verilator.",
          "Measured on a shared machine; the numbers are simulated cycle counts, so host load does not change them.",
          "", "Counters are read by the program around the timed region: CoreMark's "
-         f"{COREMARK_ITER} iterations, Dhrystone's {DHRYSTONE_RUNS} runs.", ""]
-    o += ["| Configuration | Program | Cycles | Instructions | CPI | Score per MHz | Branch pred. | Jump pred. | "
+         f"{COREMARK_ITER} iterations, Dhrystone's {DHRYSTONE_RUNS} runs.", "",
+         "CoreMark® is a registered trademark of EEMBC®. The unmodified CoreMark source is used here only as a simulated workload; these figures are not CoreMark scores and are not certified by EEMBC.", ""]
+    o += ["| Configuration | Program | Cycles | Instructions | CPI | Rate per MHz | Branch pred. | Jump pred. | "
           "I$ hit | D$ hit | Load-use bubbles |", "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for label, _, _ in CONFIGS:
         for prog, _ in PROGRAMS:
             s = results[(label, prog)]
             if prog == "coremark":
-                score = f"{COREMARK_ITER * 1e6 / s['cycles']:.3f} CM/MHz"
+                score = f"{COREMARK_ITER * 1e6 / s['cycles']:.3f} iter/Mcycle"
             else:
                 score = f"{1e6 / (s['cycles'] / DHRYSTONE_RUNS) / 1757:.3f} DMIPS/MHz"
             single = label == "single"

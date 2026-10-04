@@ -68,10 +68,10 @@ them) with the commands shown.
 
 Benchmarks (from `make bench`, full table in [docs/benchmarks.md](docs/benchmarks.md)):
 
-| Core | CoreMark, 40 iterations | Dhrystone, 500 runs |
+| Core | CoreMark workload, 40 iterations | Dhrystone, 500 runs |
 |---|---|---|
-| A, single cycle | 10,362,422 cycles, CPI 1.000, 3.86 CoreMark/MHz | 519 cycles/run, 1.10 DMIPS/MHz |
-| B, pipelined (default) | 12,201,403 cycles, CPI 1.177, 3.28 CoreMark/MHz | 726 cycles/run, 0.78 DMIPS/MHz |
+| A, single cycle | 10,362,422 cycles, CPI 1.000, 3.86 iterations per million cycles | 519 cycles/run, 1.10 DMIPS/MHz |
+| B, pipelined (default) | 12,201,403 cycles, CPI 1.177, 3.28 iterations per million cycles | 726 cycles/run, 0.78 DMIPS/MHz |
 | B with an 8 KiB I-cache | 12,114,455 cycles, CPI 1.169 | 571 cycles/run, 1.00 DMIPS/MHz |
 
 Core B: conditional branches predicted correctly 91.7 % (CoreMark) and 91.9 %
@@ -85,11 +85,15 @@ single-cycle multiplier), which would make core B roughly 6x faster on
 CoreMark. [docs/report.md](docs/report.md#7-performance) explains what that
 estimate does and does not mean.
 
-**These are not official scores.** The CoreMark run validates its CRCs and,
-counting a cycle as a microsecond, lasts the required 10 seconds, but it is a
-simulation with a notional 1 MHz clock, built from fetched sources with our own
-port layer and not submitted to EEMBC. Dhrystone is the riscv-tests version
-built with clang -O2. Use them to compare the two cores with each other.
+**These are not official scores.** The CoreMark workload validates its CRCs,
+but it runs in a simulation with a notional 1 MHz clock, built from fetched
+sources with our own port layer. Dhrystone is the riscv-tests version built
+with clang -O2. Use the numbers only to compare the two cores with each other.
+
+CoreMark® is a registered trademark of EEMBC®. This project runs the unmodified
+CoreMark source as a workload inside a simulator; the figures above are
+simulated cycle counts, not CoreMark scores, and are not certified by or
+submitted to EEMBC.
 
 Synthesis for the XC7S50 (`make synth`, [synth/report.md](synth/report.md)):
 core A 4,190 LUTs, 960 flip-flops, 4 DSP48E1; core B 8,754 LUTs, 3,759
@@ -244,6 +248,6 @@ memories and run rules, so they are context, not a ranking.
 ## License
 
 MIT (see LICENSE). riscv-tests (BSD-style licence of the Regents of the
-University of California) and CoreMark (Apache-2.0, with
-EEMBC's naming rules for published scores) are fetched at build time and are
-not part of this repository.
+University of California) and CoreMark (Apache-2.0 plus
+EEMBC's trademark licence for the CoreMark name) are fetched at build time and
+are not part of this repository. CoreMark® is a registered trademark of EEMBC®.

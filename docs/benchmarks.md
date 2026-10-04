@@ -6,21 +6,23 @@ Measured on a shared machine; the numbers are simulated cycle counts, so host lo
 
 Counters are read by the program around the timed region: CoreMark's 40 iterations, Dhrystone's 500 runs.
 
-| Configuration | Program | Cycles | Instructions | CPI | Score per MHz | Branch pred. | Jump pred. | I$ hit | D$ hit | Load-use bubbles |
+CoreMark® is a registered trademark of EEMBC®. The unmodified CoreMark source is used here only as a simulated workload; these figures are not CoreMark scores and are not certified by EEMBC.
+
+| Configuration | Program | Cycles | Instructions | CPI | Rate per MHz | Branch pred. | Jump pred. | I$ hit | D$ hit | Load-use bubbles |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| single | coremark | 10,362,422 | 10,362,437 | 1.000 | 3.860 CM/MHz | n/a | n/a | n/a | n/a | 0 |
+| single | coremark | 10,362,422 | 10,362,437 | 1.000 | 3.860 iter/Mcycle | n/a | n/a | n/a | n/a | 0 |
 | single | dhrystone | 259,531 | 259,546 | 1.000 | 1.097 DMIPS/MHz | n/a | n/a | n/a | n/a | 0 |
-| pipe | coremark | 12,201,403 | 10,362,437 | 1.177 | 3.278 CM/MHz | 91.7% | 97.2% | 99.85% | 100.00% | 1,276,618 |
+| pipe | coremark | 12,201,403 | 10,362,437 | 1.177 | 3.278 iter/Mcycle | 91.7% | 97.2% | 99.85% | 100.00% | 1,276,618 |
 | pipe | dhrystone | 362,939 | 259,546 | 1.398 | 0.784 DMIPS/MHz | 91.9% | 91.4% | 97.71% | 99.98% | 14,508 |
-| pipe-nobp | coremark | 14,587,065 | 10,362,437 | 1.408 | 2.742 CM/MHz | 45.7% | 0.0% | 99.87% | 100.00% | 1,276,618 |
+| pipe-nobp | coremark | 14,587,065 | 10,362,437 | 1.408 | 2.742 iter/Mcycle | 45.7% | 0.0% | 99.87% | 100.00% | 1,276,618 |
 | pipe-nobp | dhrystone | 447,893 | 259,546 | 1.726 | 0.635 DMIPS/MHz | 28.3% | 0.0% | 98.02% | 99.98% | 14,508 |
-| pipe-noras | coremark | 12,226,219 | 10,362,437 | 1.180 | 3.272 CM/MHz | 91.7% | 91.8% | 99.85% | 100.00% | 1,276,618 |
+| pipe-noras | coremark | 12,226,219 | 10,362,437 | 1.180 | 3.272 iter/Mcycle | 91.7% | 91.8% | 99.85% | 100.00% | 1,276,618 |
 | pipe-noras | dhrystone | 365,939 | 259,546 | 1.410 | 0.778 DMIPS/MHz | 91.9% | 78.9% | 97.72% | 99.98% | 14,508 |
-| pipe-ic8k | coremark | 12,114,455 | 10,362,437 | 1.169 | 3.302 CM/MHz | 91.7% | 97.2% | 99.92% | 100.00% | 1,276,735 |
+| pipe-ic8k | coremark | 12,114,455 | 10,362,437 | 1.169 | 3.302 iter/Mcycle | 91.7% | 97.2% | 99.92% | 100.00% | 1,276,735 |
 | pipe-ic8k | dhrystone | 285,581 | 259,546 | 1.100 | 0.996 DMIPS/MHz | 91.9% | 91.4% | 99.97% | 99.98% | 15,007 |
-| pipe-lat1 | coremark | 12,061,923 | 10,362,437 | 1.164 | 3.316 CM/MHz | 91.7% | 97.2% | 99.85% | 100.00% | 1,276,618 |
+| pipe-lat1 | coremark | 12,061,923 | 10,362,437 | 1.164 | 3.316 iter/Mcycle | 91.7% | 97.2% | 99.85% | 100.00% | 1,276,618 |
 | pipe-lat1 | dhrystone | 308,330 | 259,546 | 1.188 | 0.923 DMIPS/MHz | 91.9% | 91.4% | 97.71% | 99.98% | 14,508 |
-| pipe-lat30 | coremark | 12,511,363 | 10,362,437 | 1.207 | 3.197 CM/MHz | 91.7% | 97.2% | 99.85% | 100.00% | 1,276,618 |
+| pipe-lat30 | coremark | 12,511,363 | 10,362,437 | 1.207 | 3.197 iter/Mcycle | 91.7% | 97.2% | 99.85% | 100.00% | 1,276,618 |
 | pipe-lat30 | dhrystone | 484,299 | 259,546 | 1.866 | 0.588 DMIPS/MHz | 91.9% | 91.4% | 97.71% | 99.98% | 14,508 |
 
 Configurations:

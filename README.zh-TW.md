@@ -50,10 +50,10 @@
 
 效能（`make bench`，完整表格在 [docs/benchmarks.md](docs/benchmarks.md)）：
 
-| 核心 | CoreMark，40 次迭代 | Dhrystone，500 次 |
+| 核心 | CoreMark 測試程式，40 次迭代 | Dhrystone，500 次 |
 |---|---|---|
-| A，單週期 | 10,362,422 週期，CPI 1.000，3.86 CoreMark/MHz | 每次 519 週期，1.10 DMIPS/MHz |
-| B，管線（預設） | 12,201,403 週期，CPI 1.177，3.28 CoreMark/MHz | 每次 726 週期，0.78 DMIPS/MHz |
+| A，單週期 | 10,362,422 週期，CPI 1.000，每百萬週期 3.86 次迭代 | 每次 519 週期，1.10 DMIPS/MHz |
+| B，管線（預設） | 12,201,403 週期，CPI 1.177，每百萬週期 3.28 次迭代 | 每次 726 週期，0.78 DMIPS/MHz |
 | B，I-cache 改 8 KiB | 12,114,455 週期，CPI 1.169 | 每次 571 週期，1.00 DMIPS/MHz |
 
 核心 B 的條件分支猜對率：CoreMark 91.7%、Dhrystone 91.9%；跳躍和 return：97.2% 和 91.4%。
@@ -62,9 +62,12 @@ Yosys 只算邏輯延遲的估計（`make sta`，[synth/timing.md](synth/timing.
 （經過組合邏輯除法器），核心 B 8.0 ns（經過單週期乘法器），換算 CoreMark 大約快 6 倍。
 這個估計能說明什麼、不能說明什麼，寫在 [docs/report.md](docs/report.md#7-performance)。
 
-**這些不是官方分數。** CoreMark 的 CRC 驗證通過，而且把一個週期當一微秒算時也跑滿規定的 10 秒，
-但那是模擬器上假想的 1 MHz 時脈，用的是下載的原始碼加上我們自己的移植層，也沒有送交 EEMBC。
-Dhrystone 是 riscv-tests 版本，用 clang -O2 編譯。這些數字只適合拿來比較兩顆核心。
+**這些不是官方分數。** CoreMark 測試程式的 CRC 驗證通過，但那是在模擬器上用假想的 1 MHz 時脈跑的，
+用的是下載的原始碼加上我們自己的移植層。Dhrystone 是 riscv-tests 版本，用 clang -O2 編譯。
+這些數字只適合拿來比較兩顆核心。
+
+CoreMark® 是 EEMBC® 的註冊商標。這個專案只是把未修改的 CoreMark 原始碼當成測試程式，
+放在模擬器裡跑；上面的數字是模擬出來的週期數，不是 CoreMark 分數，也沒有經過 EEMBC 認證或送審。
 
 合成到 XC7S50（`make synth`，[synth/report.md](synth/report.md)）：
 核心 A 4,190 LUT、960 個正反器、4 個 DSP48E1；核心 B 8,754 LUT、3,759 個正反器、
@@ -190,4 +193,4 @@ synth/          Yosys 腳本、合成用外殼、報告
 ## 授權
 
 MIT（見 LICENSE）。riscv-tests（加州大學董事會的 BSD 式授權）和 CoreMark（Apache-2.0，
-另有 EEMBC 對發表分數的命名規則）在建置時下載，不屬於這個儲存庫。
+另有 EEMBC 對 CoreMark 名稱的商標授權）在建置時下載，不屬於這個儲存庫。CoreMark® 是 EEMBC® 的註冊商標。

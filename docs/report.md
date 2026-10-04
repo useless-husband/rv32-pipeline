@@ -207,7 +207,7 @@ off, no return stack, 8 KiB I-cache, memory latency 1 and 30). Full table:
 
 ### 7.2 Results
 
-| Configuration | CoreMark cycles | CPI | CoreMark/MHz | Dhrystone cycles/run | CPI | DMIPS/MHz |
+| Configuration | CoreMark-workload cycles | CPI | iterations per million cycles | Dhrystone cycles/run | CPI | DMIPS/MHz |
 |---|---:|---:|---:|---:|---:|---:|
 | A: single cycle | 10,362,422 | 1.000 | 3.86 | 519 | 1.000 | 1.10 |
 | B: default | 12,201,403 | 1.177 | 3.28 | 726 | 1.398 | 0.78 |

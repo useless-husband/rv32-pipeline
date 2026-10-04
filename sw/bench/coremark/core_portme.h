@@ -47,7 +47,7 @@ typedef ee_u32 CORE_TICKS;
 #define MAIN_HAS_NORETURN 0
 
 /* ticks are cycles; CoreMark reports seconds as if the clock ran at 1 MHz,
- * so its "Iterations/Sec" is iterations per million cycles (= CoreMark/MHz) */
+ * so its "Iterations/Sec" is iterations per million cycles (numerically, iterations per MHz of the notional clock; not a CoreMark score) */
 #define EE_TICKS_PER_SEC 1000000
 
 extern ee_u32 default_num_contexts;
