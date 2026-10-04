@@ -1,0 +1,151 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" width="1000" height="600" font-family="Helvetica, Arial, sans-serif" font-size="13">
+  <title>Core B: five-stage pipeline with caches</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#24292f"/>
+    </marker>
+    <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0969da"/>
+    </marker>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#cf222e"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1000" height="600" fill="#ffffff"/>
+
+  <!-- stage headers -->
+  <g font-weight="bold" font-size="14" fill="#24292f">
+    <text x="30" y="28">IF  fetch</text>
+    <text x="232" y="28">ID  decode</text>
+    <text x="432" y="28">EX  execute</text>
+    <text x="672" y="28">MEM  memory</text>
+    <text x="852" y="28">WB  write back</text>
+  </g>
+
+  <!-- pipeline registers -->
+  <g fill="#d0d7de" stroke="#57606a">
+    <rect x="205" y="45" width="10" height="355"/>
+    <rect x="405" y="45" width="10" height="355"/>
+    <rect x="645" y="45" width="10" height="355"/>
+    <rect x="825" y="45" width="10" height="355"/>
+  </g>
+
+  <g fill="#f6f8fa" stroke="#24292f" stroke-width="1.2">
+    <!-- IF -->
+    <rect x="25" y="55" width="70" height="40" rx="4"/>
+    <rect x="25" y="125" width="165" height="62" rx="4"/>
+    <rect x="25" y="215" width="165" height="62" rx="4" fill="#fff8c5"/>
+    <!-- ID -->
+    <rect x="228" y="55" width="160" height="50" rx="4"/>
+    <rect x="228" y="130" width="160" height="62" rx="4"/>
+    <rect x="228" y="225" width="160" height="70" rx="4"/>
+    <!-- EX -->
+    <rect x="428" y="55" width="80" height="62" rx="4"/>
+    <rect x="525" y="55" width="105" height="40" rx="4"/>
+    <rect x="525" y="105" width="105" height="40" rx="4"/>
+    <rect x="525" y="155" width="105" height="40" rx="4"/>
+    <rect x="525" y="205" width="105" height="40" rx="4"/>
+    <rect x="428" y="255" width="202" height="55" rx="4"/>
+    <!-- MEM -->
+    <rect x="668" y="55" width="150" height="95" rx="4" fill="#fff8c5"/>
+    <rect x="668" y="170" width="145" height="40" rx="4"/>
+    <!-- WB -->
+    <rect x="848" y="55" width="130" height="50" rx="4"/>
+    <rect x="848" y="160" width="130" height="62" rx="4"/>
+    <!-- memory system -->
+    <rect x="190" y="470" width="190" height="45" rx="4"/>
+    <rect x="470" y="470" width="300" height="45" rx="4" fill="#fff8c5"/>
+  </g>
+
+  <g fill="#24292f">
+    <text x="47" y="80">PC</text>
+    <text x="35" y="147">branch predictor</text>
+    <text x="35" y="165" font-size="12">BTB 128, 2-bit BHT 256,</text>
+    <text x="35" y="180" font-size="12">return stack 8</text>
+    <text x="35" y="237">I-cache 4 KiB</text>
+    <text x="35" y="255" font-size="12">direct mapped, 16 B lines,</text>
+    <text x="35" y="270" font-size="12">block RAM (sync read)</text>
+
+    <text x="238" y="77">decoder</text>
+    <text x="238" y="95" font-size="12">immediates, control</text>
+    <text x="238" y="152">register file</text>
+    <text x="238" y="170" font-size="12">2 read, 1 write,</text>
+    <text x="238" y="185" font-size="12">WB value bypassed to ID</text>
+    <text x="238" y="247">hazard unit</text>
+    <text x="238" y="265" font-size="12">load-use: 1 bubble</text>
+    <text x="238" y="280" font-size="12">CSR: wait for EX/MEM/WB</text>
+
+    <text x="436" y="80">forward</text>
+    <text x="436" y="98" font-size="12">MEM, WB</text>
+    <text x="535" y="80">ALU</text>
+    <text x="535" y="125">branch unit</text>
+    <text x="535" y="175">multiplier</text>
+    <text x="535" y="190" font-size="11">33x33, 4 DSP48</text>
+    <text x="535" y="225">divider</text>
+    <text x="535" y="240" font-size="11">1 bit per cycle</text>
+    <text x="436" y="277">CSR file, exceptions, MRET</text>
+    <text x="436" y="295" font-size="12">next PC = target / mtvec / mepc</text>
+
+    <text x="678" y="77">D-cache 4 KiB</text>
+    <text x="678" y="95" font-size="12">2-way, LRU, write-back,</text>
+    <text x="678" y="110" font-size="12">write-allocate, store</text>
+    <text x="678" y="125" font-size="12">bypass; I/O is uncached</text>
+    <text x="678" y="195">load align, extend</text>
+
+    <text x="858" y="77">write-back mux</text>
+    <text x="858" y="95" font-size="12">to register file</text>
+    <text x="858" y="182">commit port</text>
+    <text x="858" y="200" font-size="12">compared with the</text>
+    <text x="858" y="215" font-size="12">golden model (C)</text>
+
+    <text x="200" y="492">bus arbiter</text>
+    <text x="200" y="508" font-size="12">D-cache first</text>
+    <text x="480" y="492">memory (simulation model)</text>
+    <text x="480" y="508" font-size="12">1 MiB RAM + I/O, 16-byte lines, latency N cycles</text>
+  </g>
+
+  <!-- datapath arrows -->
+  <g stroke="#24292f" stroke-width="1.3" fill="none" marker-end="url(#a)">
+    <path d="M95 75 H200"/>
+    <path d="M60 95 V122"/>
+    <path d="M108 187 V212"/>
+    <path d="M190 246 H200"/>
+    <path d="M215 80 H225"/>
+    <path d="M308 105 V127"/>
+    <path d="M388 160 H400"/>
+    <path d="M415 86 H425"/>
+    <path d="M508 75 H522"/>
+    <path d="M630 75 H640"/>
+    <path d="M655 100 H665"/>
+    <path d="M740 145 V167"/>
+    <path d="M813 190 H820"/>
+    <path d="M835 80 H845"/>
+    <path d="M913 105 V157"/>
+    <path d="M108 277 V465 H190" stroke-dasharray="0"/>
+    <path d="M740 210 V440 H380 V467"/>
+    <path d="M380 492 H467"/>
+  </g>
+
+  <!-- write back to the register file -->
+  <path d="M978 80 H990 V325 H320 V195" stroke="#24292f" stroke-width="1.3" fill="none" marker-end="url(#a)"/>
+  <text x="850" y="318" font-size="12" fill="#24292f">register write</text>
+
+  <!-- forwarding -->
+  <g stroke="#0969da" stroke-width="1.6" fill="none" stroke-dasharray="6 3" marker-end="url(#ab)">
+    <path d="M740 55 V40 H468 V52"/>
+    <path d="M913 55 V34 H455 V52"/>
+  </g>
+  <text x="470" y="13" font-size="12" fill="#0969da">forwarding: MEM -&gt; EX and WB -&gt; EX</text>
+
+  <!-- redirects -->
+  <g stroke="#cf222e" stroke-width="1.6" fill="none" stroke-dasharray="6 3" marker-end="url(#ar)">
+    <path d="M530 310 V345 H15 V78 H22"/>
+    <path d="M800 150 V360 H8 V70 H22"/>
+  </g>
+  <text x="240" y="340" font-size="12" fill="#cf222e">redirect from EX: mispredict, trap, MRET (flush IF, ID)</text>
+  <text x="240" y="376" font-size="12" fill="#cf222e">redirect from MEM: FENCE.I after D-cache flush + I-cache invalidate (flush IF, ID, EX)</text>
+
+  <text x="25" y="430" font-size="12" fill="#57606a">line refills</text>
+  <text x="590" y="430" font-size="12" fill="#57606a">refills, write-backs, I/O</text>
+  <text x="25" y="575" font-size="12" fill="#57606a">Grey bars are pipeline registers. Solid arrows: data; blue: forwarding; red: control-flow redirects; yellow: memories. The predictor is updated from EX.</text>
+</svg>

@@ -10,7 +10,8 @@ could notice it.  A mutant is "killed" when at least one suite fails.
     python3 tools/mutate.py fwd_mem    # just one
 
 Suites: unit = the module's cocotb test; rvtests = the 50 riscv-tests in
-lockstep; random = random programs (seeds 1-30) in lockstep; iss = the
+lockstep; random = random programs (seeds 1-30) in lockstep; perf = the
+CoreMark efficiency bounds of tests/system/test_perf.py; iss = the
 riscv-tests on the golden model alone.
 """
 
@@ -108,7 +109,7 @@ def prepare(mid, path, old, new):
         src = REPO / item
         (shutil.copytree if src.is_dir() else shutil.copy)(src, d / item)
     (d / "build").mkdir()
-    for sub in ("rvtests", "random", "third_party"):
+    for sub in ("rvtests", "random", "third_party", "sw"):
         if (REPO / "build" / sub).exists():
             os.symlink(REPO / "build" / sub, d / "build" / sub)
     f = d / path
@@ -143,6 +144,9 @@ def run_suites(d, unit, cores, model):
             p = sh(f'./build/vsim_{core} --quiet --max-cycles 5000000 "{elf}"', d, timeout=120)
             fails += p.returncode != 0
         res[f"random {core}"] = fails
+        if core == "pipe":
+            r = sh(f'"{sys.executable}" -m pytest -q tests/system/test_perf.py', d)
+            res["perf pipe"] = r.returncode != 0
     return res
 
 

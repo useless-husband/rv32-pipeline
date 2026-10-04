@@ -48,8 +48,14 @@ def run(sim, elf):
     return stats, p.stdout
 
 
-def pct(a, b):
-    return f"{100.0 * a / b:.1f}%" if b else "n/a"
+def pct(a, b, digits=1):
+    return f"{100.0 * a / b:.{digits}f}%" if b else "n/a"
+
+
+def sta_ns(core):
+    f = B / "synth" / core / "sta.txt"
+    m = re.search(r"Latest arrival time in '\S+' is (\d+)", f.read_text()) if f.exists() else None
+    return int(m.group(1)) / 1000 if m else None
 
 
 def main():
@@ -82,8 +88,8 @@ def main():
                 label, prog, s["cycles"], s["instret"], s["CPI"], score,
                 "n/a" if single else pct(s["branches"] - s["branch_mispredicts"], s["branches"]),
                 "n/a" if single else pct(s["jumps"] - s["jump_mispredicts"], s["jumps"]),
-                "n/a" if single else pct(s["icache_accesses"] - s["icache_misses"], s["icache_accesses"]),
-                "n/a" if single else pct(s["dcache_accesses"] - s["dcache_misses"], s["dcache_accesses"]),
+                "n/a" if single else pct(s["icache_accesses"] - s["icache_misses"], s["icache_accesses"], 2),
+                "n/a" if single else pct(s["dcache_accesses"] - s["dcache_misses"], s["dcache_accesses"], 2),
                 s["load_use_stalls"]))
     o += ["", "Configurations:", ""]
     o += [f"- `{label}`: {desc}" for label, _, desc in CONFIGS]
@@ -91,6 +97,13 @@ def main():
     for prog, _ in PROGRAMS:
         a, b = results[("single", prog)]["cycles"], results[("pipe", prog)]["cycles"]
         o.append(f"- {prog}: {a:,.0f} / {b:,.0f} = {a / b:.3f} (the pipelined core needs {b / a:.2f}x the cycles)")
+    ta, tb = sta_ns("single"), sta_ns("pipe")
+    if ta and tb:
+        o += ["", f"Estimated run time with the logic-only path delays from `make sta` (core A {ta:.1f} ns, "
+                  f"core B {tb:.1f} ns; no routing, not timing sign-off, see synth/report.md):", ""]
+        for prog, _ in PROGRAMS:
+            a, b = results[("single", prog)]["cycles"] * ta, results[("pipe", prog)]["cycles"] * tb
+            o.append(f"- {prog}: {a / 1e6:.2f} ms vs {b / 1e6:.2f} ms, pipelined core about {a / b:.1f}x faster")
     o += ["", "CoreMark's own report on the pipelined core (default configuration):", "", "```"]
     o += [l for l in results["coremark_out"].splitlines() if not l.startswith("[")]
     o += ["```"]
