@@ -121,3 +121,20 @@ build/vsim_single: $(SIM_SINGLE) rtl/rv_defs.svh sim/sim_main.cpp build/iss/rv_i
 	rm -rf build/vm_single
 	$(VERILATOR) $(VFLAGS) -Mdir build/vm_single --top-module sim_top_single $(SIM_SINGLE)
 	$(call VSIM_CXX,vm_single) -o $@ -lpthread
+
+RTL_PIPE := $(RTL_COMMON) rtl/bpred.sv rtl/divider.sv rtl/mem_arbiter.sv rtl/icache.sv rtl/dcache.sv \
+            rtl/core_pipe.sv
+SIM_PIPE := $(RTL_PIPE) rtl/sim/mem_model.sv rtl/sim/sim_top_pipe.sv
+# extra -G overrides for the pipelined simulator, e.g. PIPE_G="-GMEM_LATENCY=50"
+PIPE_G ?=
+
+build/vsim_pipe: $(SIM_PIPE) rtl/rv_defs.svh sim/sim_main.cpp sim/pipeview.inc build/iss/rv_iss.o build/iss/disasm.o
+	rm -rf build/vm_pipe
+	$(VERILATOR) $(VFLAGS) -Mdir build/vm_pipe --top-module sim_top_pipe $(PIPE_G) $(SIM_PIPE)
+	$(call VSIM_CXX,vm_pipe) -DHAVE_PIPEVIEW -o $@ -lpthread
+
+# ------------------------------------------------------------------ lint
+lint:
+	$(VERILATOR) --lint-only -Wall -Irtl --top-module sim_top_single $(SIM_SINGLE)
+	$(VERILATOR) --lint-only -Wall -Irtl --top-module sim_top_pipe $(SIM_PIPE)
+	@echo "lint: verilator -Wall clean"

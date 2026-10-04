@@ -33,4 +33,7 @@ module muldiv_comb (
             default: y = (b == 32'd0) ? a : (a_neg ? -r : r);
         endcase
     end
+
+    logic unused;
+    assign unused = &{1'b0, prod[65:64]};
 endmodule

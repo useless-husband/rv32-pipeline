@@ -63,5 +63,5 @@ module sim_top_single (
     assign mmio_wdata = dmem_wdata;
 
     logic unused;
-    assign unused = &{1'b0, dmem_re, imem_addr[1:0], dmem_addr[1:0]};
+    assign unused = &{1'b0, dmem_re, imem_addr[1:0], dmem_addr[1:0], imem_addr[30:20], dmem_addr[30:20]};
 endmodule
