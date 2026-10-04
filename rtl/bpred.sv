@@ -61,6 +61,7 @@ module bpred #(
     logic [RW-1:0] ras_top;           // index of the newest entry
     logic [RW:0]   ras_count;
     logic          use_ras;
+    localparam logic [RW:0] RAS_FULL = RAS_DEPTH[RW:0];
 
     assign use_ras = (RAS_DEPTH > 0) && btb_ret[li] && ras_count != '0;
     assign pred_target = use_ras ? {ras[ras_top], 2'b00} : {btb_tgt[li], 2'b00};
@@ -73,7 +74,7 @@ module bpred #(
             if (upd_call) begin
                 ras[ras_top + 1'b1] <= upd_pc[31:2] + 30'd1;
                 ras_top <= ras_top + 1'b1;
-                if (ras_count != (RW+1)'(RAS_DEPTH)) ras_count <= ras_count + 1'b1;
+                if (ras_count != RAS_FULL) ras_count <= ras_count + 1'b1;
             end else if (upd_ret && ras_count != '0) begin
                 ras_top <= ras_top - 1'b1;
                 ras_count <= ras_count - 1'b1;

@@ -44,18 +44,20 @@ module csr_file (
     logic [31:0] wval;
     logic [3:0]  hpm_idx;
 
+    localparam logic [6:0] HPM_END = 7'd3 + `NUM_EVENTS;  // one past mhpmcounter12
+
     assign lo = addr[6:0];
     assign hi = addr[7];
-    assign hpm_idx = 4'(lo - 7'd3);
+    assign hpm_idx = lo[3:0] - 4'd3;
     // counter CSRs: 0xB00-0xB1F/0xB80-0xB9F (machine) and 0xC00../0xC80.. (user, read-only)
     assign is_ctr = (addr[11:8] == 4'hB || addr[11:8] == 4'hC) &&
-                    (lo == 7'd0 || lo == 7'd2 || (lo >= 7'd3 && lo < 7'd3 + 7'(`NUM_EVENTS)));
+                    (lo == 7'd0 || lo == 7'd2 || (lo >= 7'd3 && lo < HPM_END));
 
     always_comb begin
         ctr = 64'd0;
         if (lo == 7'd0) ctr = mcycle;
         else if (lo == 7'd2) ctr = minstret;
-        else if (lo >= 7'd3 && lo < 7'd3 + 7'(`NUM_EVENTS)) ctr = hpm[hpm_idx];
+        else if (lo >= 7'd3 && lo < HPM_END) ctr = hpm[hpm_idx];
 
         exists = 1'b1;
         rdata = 32'd0;
@@ -141,10 +143,11 @@ module csr_file (
     genvar g;
     generate
         for (g = 0; g < `NUM_EVENTS; g = g + 1) begin : g_hpm
+            localparam logic [6:0] LO = g + 3;
             always_ff @(posedge clk) begin
                 if (rst)
                     hpm[g] <= 64'd0;
-                else if (wr_ctr && lo == 7'(g + 3))
+                else if (wr_ctr && lo == LO)
                     hpm[g] <= hi ? {wval, hpm[g][31:0]} : {hpm[g][63:32], wval};
                 else if (events[g])
                     hpm[g] <= hpm[g] + 64'd1;

@@ -1,0 +1,8 @@
+# Yosys synthesis of core B for the Spartan-7 XC7S50 (Urbana board).
+# Run from the repository root:  make synth
+# Maps to 7-series primitives (LUT6, CARRY4, RAMB18E1/RAMB36E1, DSP48E1, ...);
+# no placement, routing or timing sign-off.
+read_verilog -defer -sv -Irtl rtl/decoder.sv rtl/alu.sv rtl/regfile.sv rtl/lsu_align.sv rtl/csr_file.sv rtl/bpred.sv rtl/divider.sv rtl/mem_arbiter.sv rtl/icache.sv rtl/dcache.sv rtl/core_pipe.sv synth/top_pipe.sv
+synth_xilinx -family xc7 -top top_pipe
+tee -q -o build/synth/pipe/stat.txt stat -tech xilinx
+tee -q -o build/synth/pipe/utilization.json stat -json

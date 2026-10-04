@@ -1,0 +1,7 @@
+# Logic-only static timing estimate for core A (make sta).  Not timing sign-off:
+# cell delays from Yosys' 7-series models, no placement or routing delay,
+# distributed RAM replaced by flip-flops so every path has timing arcs.
+read_verilog -defer -sv -Irtl rtl/decoder.sv rtl/alu.sv rtl/regfile.sv rtl/lsu_align.sv rtl/csr_file.sv rtl/muldiv_comb.sv rtl/core_single.sv synth/top_single.sv
+synth_xilinx -family xc7 -top top_single -flatten -nolutram
+read_verilog -lib -specify +/xilinx/cells_sim.v
+tee -q -o build/synth/single/sta.txt sta

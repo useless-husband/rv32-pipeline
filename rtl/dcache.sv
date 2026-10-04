@@ -218,7 +218,7 @@ module dcache #(
                         wb_addr <= {t1_q, fidx, 4'b0000};
                         fway <= 1'b1;
                         state <= F_WB;
-                    end else if (fidx == IW'(SETS - 1)) begin
+                    end else if (&fidx) begin  // last set (SETS is a power of two)
                         state <= F_END;
                     end else begin
                         fidx <= fidx + 1'b1;

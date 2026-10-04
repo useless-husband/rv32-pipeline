@@ -177,10 +177,9 @@ venv:
 # CoreMark and Dhrystone are fetched at build time, unmodified; only the
 # port layer (sw/bench) is ours.  Neither result is an official score: see
 # docs/report.md section 7 for how they differ from the run rules.
-COREMARK_ITER ?= 10
 CM_SRC := core_list_join.c core_main.c core_matrix.c core_state.c core_util.c
-CM_FLAGS := $(RVCFLAGS) -Isw/bench/coremark -I$(TP)/coremark -DPERFORMANCE_RUN=1 \
-            -DITERATIONS=$(COREMARK_ITER) -DFLAGS_STR='"-O2 (clang, rv32im)"'
+CM_FLAGS = $(RVCFLAGS) -Isw/bench/coremark -I$(TP)/coremark -DPERFORMANCE_RUN=1 \
+           -DITERATIONS=$(1) -DFLAGS_STR='"-O2 (clang, rv32im)"'
 
 $(TP)/coremark/.stamp:
 	rm -rf $(TP)/coremark && mkdir -p $(TP)/coremark
@@ -188,11 +187,17 @@ $(TP)/coremark/.stamp:
 	  && git checkout -q FETCH_HEAD
 	@touch $@
 
-build/sw/coremark.elf: $(TP)/coremark/.stamp sw/bench/coremark/core_portme.c sw/bench/coremark/core_portme.h $(RT_OBJ)
-	@mkdir -p build/sw/coremark
-	for f in $(CM_SRC); do $(CLANG) $(CM_FLAGS) -c -o build/sw/coremark/$${f%.c}.o $(TP)/coremark/$$f || exit 1; done
-	$(CLANG) $(CM_FLAGS) -c -o build/sw/coremark/core_portme.o sw/bench/coremark/core_portme.c
-	$(LLD) $(RVLDFLAGS) -o $@ $(RT_OBJ) build/sw/coremark/*.o
+# coremark.elf: 10 iterations (tests); coremark-bench.elf: 40 iterations, which
+# is just over 10 million cycles on either core (make bench)
+build/sw/coremark.elf: ITER := 10
+build/sw/coremark-bench.elf: ITER := 40
+build/sw/coremark.elf build/sw/coremark-bench.elf: $(TP)/coremark/.stamp sw/bench/coremark/core_portme.c \
+    sw/bench/coremark/core_portme.h $(RT_OBJ)
+	@mkdir -p build/sw/$(basename $(notdir $@))
+	for f in $(CM_SRC); do $(CLANG) $(call CM_FLAGS,$(ITER)) -c -o build/sw/$(basename $(notdir $@))/$${f%.c}.o \
+	  $(TP)/coremark/$$f || exit 1; done
+	$(CLANG) $(call CM_FLAGS,$(ITER)) -c -o build/sw/$(basename $(notdir $@))/core_portme.o sw/bench/coremark/core_portme.c
+	$(LLD) $(RVLDFLAGS) -o $@ $(RT_OBJ) build/sw/$(basename $(notdir $@))/*.o
 
 DHRY_FLAGS := $(RVCFLAGS) -std=gnu89 -Isw/bench/include -Wno-implicit-int -Wno-implicit-function-declaration \
               -Wno-return-type -Wno-strict-prototypes -Wno-deprecated-non-prototype
@@ -205,6 +210,23 @@ build/sw/dhrystone.elf: $(TP)/riscv-tests/.stamp sw/bench/bench_support.c sw/ben
 	$(LLD) $(RVLDFLAGS) -o $@ $(RT_OBJ) build/sw/dhrystone/*.o
 
 benchmarks: build/sw/coremark.elf build/sw/dhrystone.elf
+
+# pipelined-core variants for the measurements (each is its own Verilator build)
+G_nobp := -GBP_ENABLE=0
+G_noras := -GRAS_DEPTH=0
+G_ic8k := -GICACHE_SETS=512
+G_lat1 := -GMEM_LATENCY=1
+G_lat30 := -GMEM_LATENCY=30
+VARIANTS := nobp noras ic8k lat1 lat30
+
+build/vsim_pipe-%: $(SIM_PIPE) rtl/rv_defs.svh sim/sim_main.cpp sim/pipeview.inc build/iss/rv_iss.o build/iss/disasm.o
+	rm -rf build/vm_pipe-$*
+	$(VERILATOR) $(VFLAGS) -Mdir build/vm_pipe-$* --top-module sim_top_pipe $(G_$*) $(SIM_PIPE)
+	$(call VSIM_CXX,vm_pipe-$*) -DHAVE_PIPEVIEW -o $@ -lpthread
+
+.PHONY: bench benchmarks
+bench: $(SIMS) $(addprefix build/vsim_pipe-,$(VARIANTS)) build/sw/coremark-bench.elf build/sw/dhrystone.elf
+	python3 tools/bench.py | tee build/bench.md
 
 # --------------------------------------------------------- pipeline viewer
 # Default window: 200 cycles inside the demo's quicksort (calls, returns,
@@ -219,3 +241,24 @@ pipeview: build/vsim_pipe $(PV_PROG)
 	python3 tools/pipeview.py build/pipeview.json -o build/pipeview.html \
 	  --title "$(notdir $(PV_PROG)), cycles $(PV_FROM)-$$(($(PV_FROM)+$(PV_CYCLES)-1)), pipelined core."
 	@echo "open build/pipeview.html in a browser"
+
+# ------------------------------------------------------------- synthesis
+.PHONY: synth sta
+synth:
+	mkdir -p build/synth/single build/synth/pipe
+	$(YOSYS) -q -l build/synth/single/yosys.log synth/synth_single.ys
+	$(YOSYS) -q -l build/synth/pipe/yosys.log synth/synth_pipe.ys
+	python3 tools/synth_report.py --check > synth/report.md
+	@cat synth/report.md
+
+# logic-only timing estimate (needs Yosys' sta pass; the report says what it is not)
+sta:
+	mkdir -p build/synth/single build/synth/pipe
+	$(YOSYS) -q -l build/synth/single/sta.log synth/sta_single.ys
+	$(YOSYS) -q -l build/synth/pipe/sta.log synth/sta_pipe.ys
+
+# ------------------------------------------------------ mutation checks
+# needs the riscv-tests and random programs from `make system`
+.PHONY: mutants
+mutants: check-python
+	$(PYTHON) tools/mutate.py | tee build/mutants.md
