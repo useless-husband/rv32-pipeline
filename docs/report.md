@@ -102,7 +102,7 @@ are updated in EX when an instruction resolves, never on the wrong path.
 |---|---|---|---|
 | Module | ALU, register file, decoder, M unit, divider, predictor, I-cache, D-cache, CSR file | Python models written from the ISA; exact counts for caches and predictor | `tests/unit` (cocotb, Icarus) |
 | ISA | 50 official riscv-tests (rv32ui, rv32um) | the tests check themselves, and run in lockstep | `tests/system/test_riscv_tests.py` |
-| Hazards | random programs, 100 fixed seeds, about 3,000 instructions each | lockstep with the golden model | `tests/random/rvgen.py`, `tests/system/test_random.py` |
+| Hazards | random programs, 100 fixed seeds, about 3,000 instructions of program text each (6,000-8,000 executed) | lockstep with the golden model | `tests/random/rvgen.py`, `tests/system/test_random.py` |
 | Programs | demo, CoreMark, Dhrystone | lockstep, plus CoreMark's own CRC checks | `make bench`, `tests/system/test_perf.py` |
 | The tests themselves | 16 one-line mutations | each must make a test fail | `tools/mutate.py` |
 
