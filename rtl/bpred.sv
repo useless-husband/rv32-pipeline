@@ -36,12 +36,12 @@ module bpred #(
     localparam int HI = $clog2(BHT_ENTRIES);
     localparam int TW = 30 - BI;
 
-    logic          btb_valid [0:BTB_ENTRIES-1];
+    logic [BTB_ENTRIES-1:0]      btb_valid;   // packed so reset is one assignment
     logic          btb_jump  [0:BTB_ENTRIES-1];
     logic          btb_ret   [0:BTB_ENTRIES-1];
     logic [TW-1:0] btb_tag   [0:BTB_ENTRIES-1];
     logic [29:0]   btb_tgt   [0:BTB_ENTRIES-1];
-    logic [1:0]    bht       [0:BHT_ENTRIES-1];
+    logic [BHT_ENTRIES-1:0][1:0] bht;         // packed too: Verilator 5.020 rejects <= to arrays in loops
 
     logic [BI-1:0] li, ui;
     logic [HI-1:0] lh, uh;
@@ -53,7 +53,9 @@ module bpred #(
     assign uh = upd_pc[2 +: HI];
 
     assign hit = btb_valid[li] && btb_tag[li] == pc[31:2+BI];
-    assign pred_taken = ENABLE && hit && (btb_jump[li] || bht[lh][1]);
+    logic [1:0] bht_l;                // read the counter first: Icarus cannot
+    assign bht_l = bht[lh];           // bit-select a variable-indexed packed element
+    assign pred_taken = ENABLE && hit && (btb_jump[li] || bht_l[1]);
 
     // return-address stack
     localparam int RW = (RAS_DEPTH > 1) ? $clog2(RAS_DEPTH) : 1;
@@ -84,8 +86,8 @@ module bpred #(
 
     always_ff @(posedge clk) begin
         if (rst) begin
-            for (int i = 0; i < BTB_ENTRIES; i++) btb_valid[i] <= 1'b0;
-            for (int i = 0; i < BHT_ENTRIES; i++) bht[i] <= 2'b01;  // weakly not taken
+            btb_valid <= '0;
+            bht <= {BHT_ENTRIES{2'b01}};  // weakly not taken
         end else if (upd_valid) begin
             if (upd_branch) begin
                 if (upd_taken && bht[uh] != 2'b11) bht[uh] <= bht[uh] + 2'b01;
@@ -102,5 +104,5 @@ module bpred #(
     end
 
     logic unused;
-    assign unused = &{1'b0, pc[1:0], upd_pc[1:0], upd_target[1:0]};
+    assign unused = &{1'b0, pc[1:0], upd_pc[1:0], upd_target[1:0], bht_l[0]};
 endmodule

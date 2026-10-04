@@ -59,7 +59,7 @@
 核心 B 的條件分支猜對率：CoreMark 91.7%、Dhrystone 91.9%；跳躍和 return：97.2% 和 91.4%。
 管線核心需要的週期數其實**比較多**（CoreMark 是 1.18 倍），它比較快只因為時脈可以快很多。
 Yosys 只算邏輯延遲的估計（`make sta`，[synth/timing.md](synth/timing.md)，沒有繞線、不是 timing sign-off）：核心 A 最長路徑 56.0 ns
-（經過組合邏輯除法器），核心 B 8.0 ns（經過單週期乘法器），換算 CoreMark 大約快 6 倍。
+（經過組合邏輯除法器），核心 B 7.8 ns（經過單週期乘法器），換算 CoreMark 大約快 6 倍。
 這個估計能說明什麼、不能說明什麼，寫在 [docs/report.md](docs/report.md#7-performance)。
 
 **這些不是官方分數。** CoreMark 測試程式的 CRC 驗證通過，但那是在模擬器上用假想的 1 MHz 時脈跑的，
@@ -70,7 +70,7 @@ CoreMark® 是 EEMBC® 的註冊商標。這個專案只是把未修改的 CoreM
 放在模擬器裡跑；上面的數字是模擬出來的週期數，不是 CoreMark 分數，也沒有經過 EEMBC 認證或送審。
 
 合成到 XC7S50（`make synth`，[synth/report.md](synth/report.md)）：
-核心 A 4,190 LUT、960 個正反器、4 個 DSP48E1；核心 B 8,754 LUT、3,759 個正反器、
+核心 A 4,190 LUT、960 個正反器、4 個 DSP48E1；核心 B 9,344 LUT、3,759 個正反器、
 6.5 個 block RAM、4 個 DSP48E1（佔晶片 LUT 的 27%）。
 
 ## 示範

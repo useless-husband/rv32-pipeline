@@ -80,7 +80,7 @@ Core B: conditional branches predicted correctly 91.7 % (CoreMark) and 91.9 %
 because its clock can be much faster. Yosys' logic-only timing estimate
 (`make sta`, [synth/timing.md](synth/timing.md); no routing, not timing
 sign-off) puts core A's longest path at
-56.0 ns (through the combinational divider) and core B's at 8.0 ns (through the
+56.0 ns (through the combinational divider) and core B's at 7.8 ns (through the
 single-cycle multiplier), which would make core B roughly 6x faster on
 CoreMark. [docs/report.md](docs/report.md#7-performance) explains what that
 estimate does and does not mean.
@@ -96,7 +96,7 @@ simulated cycle counts, not CoreMark scores, and are not certified by or
 submitted to EEMBC.
 
 Synthesis for the XC7S50 (`make synth`, [synth/report.md](synth/report.md)):
-core A 4,190 LUTs, 960 flip-flops, 4 DSP48E1; core B 8,754 LUTs, 3,759
+core A 4,190 LUTs, 960 flip-flops, 4 DSP48E1; core B 9,344 LUTs, 3,759
 flip-flops, 6.5 block RAMs, 4 DSP48E1 (27 % of the chip's LUTs).
 
 ## Demo

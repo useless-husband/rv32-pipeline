@@ -269,10 +269,10 @@ logic delay only, no routing, which on an FPGA is often half of a real path.
 | | Longest path (logic only) | Ends at |
 |---|---:|---|
 | Core A | 56.0 ns | register-file write data, through the 32-step combinational divider |
-| Core B | 8.0 ns | EX result, through the 33x33 multiplier (DSP48E1 cascade) and the result mux |
+| Core B | 7.8 ns | EX result, through the 33x33 multiplier (DSP48E1 cascade) and the result mux |
 
 With those delays CoreMark would take 580.8 ms on core A and 97.8 ms on core
-B, about 5.9x; Dhrystone about 5.0x. Treat this as an illustration of why
+B, about 6.1x; Dhrystone about 5.1x. Treat this as an illustration of why
 pipelines exist rather than as a measurement: core A's path is dominated by a
 divider no practical single-cycle design would keep, its memories are outside
 the analysed netlist (a real single-cycle core would add an instruction-memory
@@ -288,12 +288,13 @@ do not count.
 | | LUTs | Flip-flops | Block RAM (36 Kb) | DSP48E1 |
 |---|---:|---:|---:|---:|
 | Core A | 4,190 (12.9 %) | 960 | 0 | 4 |
-| Core B | 8,754 (26.9 %) | 3,759 | 6.5 | 4 |
+| Core B | 9,344 (28.7 %) | 3,759 | 6.5 | 4 |
 
-In core B the D-cache is the largest block (about 3,200 LUTs: 128-bit line
+In core B the D-cache is the largest block (about 3,100 LUTs: 128-bit line
 multiplexers for two ways, the store bypass and the write-back buffer),
-followed by the CSR file (about 1,500 LUTs, mostly twelve 64-bit counters) and
-the predictor (about 1,100 LUTs, the BTB in distributed RAM). The cache arrays
+followed by the predictor (about 1,800 LUTs: the BTB in distributed RAM plus
+the read multiplexer of the packed counter table) and the CSR file (about
+1,500 LUTs, mostly twelve 64-bit counters). The cache arrays
 use 6.5 block RAMs. Both cores fit comfortably; neither has been placed,
 routed or run on a board.
 

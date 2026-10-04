@@ -40,10 +40,10 @@ Cycle ratio, single-cycle / pipelined (default):
 - coremark: 10,362,422 / 12,201,403 = 0.849 (the pipelined core needs 1.18x the cycles)
 - dhrystone: 259,531 / 362,939 = 0.715 (the pipelined core needs 1.40x the cycles)
 
-Estimated run time with the logic-only path delays from `make sta` (core A 56.0 ns, core B 8.0 ns; no routing, not timing sign-off, see synth/timing.md):
+Estimated run time with the logic-only path delays from `make sta` (core A 56.0 ns, core B 7.8 ns; no routing, not timing sign-off, see synth/timing.md):
 
-- coremark: 580.76 ms vs 97.77 ms, pipelined core about 5.9x faster
-- dhrystone: 14.55 ms vs 2.91 ms, pipelined core about 5.0x faster
+- coremark: 580.76 ms vs 95.77 ms, pipelined core about 6.1x faster
+- dhrystone: 14.55 ms vs 2.85 ms, pipelined core about 5.1x faster
 
 CoreMark's own report on the pipelined core (default configuration):
 

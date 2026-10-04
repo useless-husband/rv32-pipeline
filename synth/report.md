@@ -27,19 +27,19 @@ Also: 673 CARRY4, 48 LUTs used as distributed RAM, block RAM = 0 RAMB36E1 + 0 RA
 
 | Resource | Used | XC7S50 | Share |
 |---|---:|---:|---:|
-| LUTs (logic + LUTRAM) | 8,754 | 32,600 | 26.9% |
+| LUTs (logic + LUTRAM) | 9,344 | 32,600 | 28.7% |
 | Flip-flops | 3,759 | 65,200 | 5.8% |
 | Block RAM (36 Kb units) | 6.5 | 75 | 8.7% |
 | DSP48E1 | 4 | 120 | 3.3% |
 
-Also: 331 CARRY4, 332 LUTs used as distributed RAM, block RAM = 6 RAMB36E1 + 1 RAMB18E1.
+Also: 336 CARRY4, 332 LUTs used as distributed RAM, block RAM = 6 RAMB36E1 + 1 RAMB18E1.
 
 | Block (including its sub-blocks) | LUT | FF | BRAM36 | DSP |
 |---|---:|---:|---:|---:|
-| core B (everything below) | 8,754 | 3,759 | 6.5 | 4 |
-| D-cache (2 x 2 KiB, write-back) | 3,125 | 946 | 4 | 0 |
-| CSRs and 12 x 64-bit counters | 1,630 | 928 | 0 | 0 |
-| branch predictor (BTB 128, BHT 256, RAS 8) | 1,142 | 650 | 0 | 0 |
+| core B (everything below) | 9,344 | 3,759 | 6.5 | 4 |
+| D-cache (2 x 2 KiB, write-back) | 3,090 | 946 | 4 | 0 |
+| branch predictor (BTB 128, BHT 256, RAS 8) | 1,827 | 650 | 0 | 0 |
+| CSRs and 12 x 64-bit counters | 1,520 | 928 | 0 | 0 |
 | I-cache (4 KiB) | 559 | 287 | 2.5 | 0 |
 | ALU | 482 | 0 | 0 | 0 |
 | iterative divider | 370 | 141 | 0 | 0 |
