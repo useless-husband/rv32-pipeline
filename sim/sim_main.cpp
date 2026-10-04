@@ -237,7 +237,7 @@ int main(int argc, char **argv)
 #endif
 
     if (exited) {
-        if (opt.lockstep && status != 2 && std::string(iss.console ? iss.console : "") != console) {
+        if (opt.lockstep && status != 2 && std::string(iss.console ? iss.console : "", iss.console_len) != console) {
             std::fprintf(stderr, "vsim: console output differs from the golden model\n");
             status = 2;
         }

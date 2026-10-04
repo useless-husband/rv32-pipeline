@@ -138,3 +138,34 @@ lint:
 	$(VERILATOR) --lint-only -Wall -Irtl --top-module sim_top_single $(SIM_SINGLE)
 	$(VERILATOR) --lint-only -Wall -Irtl --top-module sim_top_pipe $(SIM_PIPE)
 	@echo "lint: verilator -Wall clean"
+
+# ----------------------------------------------------------------- tests
+.PHONY: lint check-python unit system test random-one venv iss-test
+check-python:
+	@$(PYTHON) -c "import cocotb, pytest" 2>/dev/null || { \
+	  echo "cocotb/pytest not found for $(PYTHON)."; \
+	  echo "Run 'make venv' once (creates $(VENV)), or pass PYTHON=/path/to/python."; exit 1; }
+
+SIMS := build/vsim_single build/vsim_pipe
+PYENV := CLANG="$(CLANG)" LLD="$(LLD)"
+
+system: check-python $(SIMS) rvtests sw
+	rm -rf build/random
+	$(PYENV) $(PYTHON) -m pytest -q tests/system
+
+# one random program on one core, e.g. make random-one SEED=17 CORE=pipe
+SEED ?= 1
+CORE ?= pipe
+LENGTH ?= 3000
+random-one: build/vsim_$(CORE)
+	@mkdir -p build/random
+	$(PYTHON) tests/random/rvgen.py --seed $(SEED) --length $(LENGTH) -o build/random/one.S
+	$(CLANG) $(RVARCH) -Imodel -c -o build/random/one.o build/random/one.S
+	$(LLD) -T sw/runtime/link.ld -o build/random/one.elf build/random/one.o
+	./build/vsim_$(CORE) --quiet --stats --trace build/random/one.trace build/random/one.elf
+
+test: lint iss-test unit system
+
+venv:
+	python3 -m venv $(VENV)
+	$(VENV)/bin/pip install -q -r requirements-dev.txt
