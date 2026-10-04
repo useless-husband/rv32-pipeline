@@ -1,7 +1,8 @@
 // Iterative divider for the pipelined core: one quotient bit per cycle
-// (restoring division on magnitudes, sign fixed at the end), 34 cycles from
-// start to done.  Division by zero finishes after one cycle with the ISA's
-// results (quotient all ones, remainder = dividend).
+// (restoring division on magnitudes, sign fixed at the end).  `done` rises
+// 33 cycles after `start` (a divide spends 34 cycles in EX); division by
+// zero is done after one cycle with the ISA's results (quotient all ones,
+// remainder = dividend).
 // op: funct3[1:0] of DIV(00)/DIVU(01)/REM(10)/REMU(11).
 module divider (
     input  logic        clk,

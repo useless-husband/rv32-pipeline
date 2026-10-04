@@ -146,6 +146,9 @@ check-python:
 	  echo "cocotb/pytest not found for $(PYTHON)."; \
 	  echo "Run 'make venv' once (creates $(VENV)), or pass PYTHON=/path/to/python."; exit 1; }
 
+unit: check-python
+	$(PYTHON) -m pytest -q tests/unit
+
 SIMS := build/vsim_single build/vsim_pipe
 PYENV := CLANG="$(CLANG)" LLD="$(LLD)"
 
