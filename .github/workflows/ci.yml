@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Everything comes from Ubuntu's own packages: verilator (5.020 on 24.04),
+# iverilog (12), yosys (0.33), clang + lld (LLVM 18, RISC-V target built in).
+# The RTL keeps to a conservative SystemVerilog subset (no packages,
+# interfaces, structs or casts to parameter widths) so these older versions
+# accept it.  Third-party sources (riscv-tests, CoreMark) are fetched by the
+# Makefile at pinned commits.
+
+jobs:
+  lint-and-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install HDL tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends verilator iverilog
+          verilator --version
+          iverilog -V 2>&1 | head -1
+      - run: python -m pip install -r requirements-dev.txt
+      - name: Verilator lint (-Wall)
+        run: make lint
+      - name: cocotb unit tests (Icarus)
+        run: make unit PYTHON=python
+
+  system:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Verilator and the RISC-V cross compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends verilator iverilog clang lld
+          verilator --version
+          clang --version | head -1
+          ld.lld --version
+      - run: python -m pip install -r requirements-dev.txt
+      - name: riscv-tests on the golden model
+        run: make iss-test
+      - name: riscv-tests, random programs and benchmarks on both cores, in lockstep
+        run: make system PYTHON=python
+      - name: Mutation check (every mutant must be caught)
+        run: make mutants PYTHON=python
+      - name: Benchmarks (cycle counts from the simulated cores)
+        run: make bench
+      - name: Pipeline viewer page
+        run: make pipeview
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            build/bench.md
+            build/mutants.md
+            build/pipeview.html
+
+  synth:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Yosys
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends yosys
+          yosys -V
+      - name: synth_xilinx for the XC7S50, both cores (fails if either does not fit)
+        run: make synth
