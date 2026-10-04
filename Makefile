@@ -140,7 +140,7 @@ lint:
 	@echo "lint: verilator -Wall clean"
 
 # ----------------------------------------------------------------- tests
-.PHONY: lint check-python unit system test random-one venv iss-test
+.PHONY: lint check-python unit system test random-one random-soak venv iss-test
 check-python:
 	@$(PYTHON) -c "import cocotb, pytest" 2>/dev/null || { \
 	  echo "cocotb/pytest not found for $(PYTHON)."; \
@@ -166,6 +166,10 @@ random-one: build/vsim_$(CORE)
 	$(CLANG) $(RVARCH) -Imodel -c -o build/random/one.o build/random/one.S
 	$(LLD) -T sw/runtime/link.ld -o build/random/one.elf build/random/one.o
 	./build/vsim_$(CORE) --quiet --stats --trace build/random/one.trace build/random/one.elf
+
+# longer soak: 1000 random programs on each core (about 2 minutes)
+random-soak: check-python $(SIMS)
+	RANDOM_SEEDS=1000 $(PYENV) $(PYTHON) -m pytest -q tests/system/test_random.py
 
 test: lint iss-test unit system
 

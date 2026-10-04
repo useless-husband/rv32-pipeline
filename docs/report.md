@@ -152,6 +152,7 @@ instructions.
 | riscv-tests on the golden model alone | `make iss-test` | 50 / 50 |
 | riscv-tests, core A and core B in lockstep | `make system` | 100 / 100 |
 | random programs, seeds 1-100, both cores | `make system` | 200 / 200 |
+| random programs, seeds 1-1000, both cores | `make random-soak` | 2,000 / 2,000 |
 | CoreMark efficiency bounds on core B | `make system` | pass |
 | cocotb unit tests | `make unit` | 11 / 11 |
 | `verilator --lint-only -Wall` | `make lint` | clean |

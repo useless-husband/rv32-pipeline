@@ -43,6 +43,7 @@
 | 官方 riscv-tests rv32ui + rv32um（固定 commit），只跑黃金模型 | `make iss-test` | 50 / 50 通過 |
 | 同樣 50 個測試在核心 A、核心 B 上，各自和模型 lockstep | `make system` | 100 / 100 通過 |
 | 專門製造危障的隨機程式，seed 1-100，兩顆核心，lockstep | `make system` | 200 / 200 通過 |
+| 同上，seed 1-1000（長時間測試） | `make random-soak` | 2,000 / 2,000 通過 |
 | cocotb 單元測試（ALU、暫存器、解碼器、乘除法、除法器、預測器、I-cache、D-cache、CSR） | `make unit` | 11 / 11 通過 |
 | RTL 和模型的單行突變 | `make mutants` | 16 / 16 被抓到 |
 | 兩個設計的 `verilator --lint-only -Wall` | `make lint` | 無警告 |

@@ -94,7 +94,7 @@ Two I/O registers: `0x1000_0000` (store: one byte to the console) and
 
 ## 3. The golden model and the commit port
 
-`model/rv_iss.c` is about 400 lines of C written from the ISA manual. One
+`model/rv_iss.c` is about 450 lines of C written from the ISA manual. One
 `rv_step()` executes one instruction (or takes one exception) and fills an
 `rv_commit` record:
 
@@ -128,7 +128,8 @@ file, ALU, branch comparator and a combinational multiplier/divider work in the
 same cycle; the load/store aligner talks to a combinational data memory; the
 write-back multiplexer writes the register file at the clock edge. Next PC is
 `pc+4`, the branch/JAL target, the JALR target, `mtvec` on a trap or `mepc`
-on MRET. CPI is exactly 1 by construction; the cost is the clock period (7.3).
+on MRET. CPI is exactly 1 by construction; the cost is the clock period
+(report.md 7.4).
 
 ## 5. Core B: the pipeline
 
@@ -203,7 +204,7 @@ fetched before step 2 is thrown away.
 ### 5.7 Divider and multiplier
 
 The multiplier is one 33x33 signed product in EX (Yosys maps it to four
-DSP48E1); it is also the longest path in core B (7.3). The divider computes one
+DSP48E1); it is also the longest path in core B (report.md 7.4). The divider computes one
 quotient bit per cycle on magnitudes and fixes the signs at the end; it latches
 its operands when it starts, so forwarding sources moving on do not matter.
 

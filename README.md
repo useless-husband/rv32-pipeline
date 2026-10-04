@@ -61,6 +61,7 @@ them) with the commands shown.
 | Official riscv-tests, rv32ui + rv32um (pinned commit), golden model alone | `make iss-test` | 50 / 50 pass |
 | Same 50 tests on core A and on core B, each in lockstep with the model | `make system` | 100 / 100 pass |
 | Random hazard-stressing programs, seeds 1-100, both cores, lockstep | `make system` | 200 / 200 pass |
+| Same, seeds 1-1000 (soak) | `make random-soak` | 2,000 / 2,000 pass |
 | cocotb unit tests (ALU, register file, decoder, M unit, divider, predictor, I-cache, D-cache, CSRs) | `make unit` | 11 / 11 pass |
 | One-line mutations of the RTL and of the model | `make mutants` | 16 / 16 caught |
 | `verilator --lint-only -Wall` on both designs | `make lint` | clean |
