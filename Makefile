@@ -98,3 +98,26 @@ iss-test: build/rvsim rvtests
 	@pass=0; fail=0; for t in $(RVTESTS); do \
 	  if ./build/rvsim --quiet build/rvtests/$$t.elf; then pass=$$((pass+1)); else echo "FAIL $$t"; fail=$$((fail+1)); fi; \
 	done; echo "golden model: $$pass passed, $$fail failed"; [ $$fail -eq 0 ]
+
+# ------------------------------------------------------ Verilator models
+# Two simulators built from the same harness: build/vsim_single (core A) and
+# build/vsim_pipe (core B).  Verilator writes C++; we compile it directly.
+VROOT := $(shell $(VERILATOR) --getenv VERILATOR_ROOT 2>/dev/null)
+VDEFS := -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TIMING=0 -DVM_TRACE=0 -DVM_TRACE_FST=0 -DVM_TRACE_VCD=0 \
+         -DVM_TRACE_SAIF=0
+VFLAGS := --cc -O3 --x-assign fast --x-initial fast --noassert -Irtl --prefix Vtop -Wno-fatal
+RTL_COMMON := rtl/decoder.sv rtl/alu.sv rtl/regfile.sv rtl/lsu_align.sv rtl/csr_file.sv
+RTL_SINGLE := $(RTL_COMMON) rtl/muldiv_comb.sv rtl/core_single.sv
+SIM_SINGLE := $(RTL_SINGLE) rtl/sim/sim_top_single.sv
+VSIM_CXX = $(CXX) -std=c++17 -O2 -w $(VDEFS) -Imodel -Isim -Ibuild/$(1) -I$(VROOT)/include \
+  -I$(VROOT)/include/vltstd build/$(1)/*.cpp $(VROOT)/include/verilated.cpp \
+  $(VROOT)/include/verilated_threads.cpp sim/sim_main.cpp build/iss/rv_iss.o build/iss/disasm.o
+
+build/iss/%.o: model/%.c model/rv_iss.h model/rv_platform.h
+	@mkdir -p build/iss
+	$(CC) -std=c11 -O2 -Wall -c -o $@ $<
+
+build/vsim_single: $(SIM_SINGLE) rtl/rv_defs.svh sim/sim_main.cpp build/iss/rv_iss.o build/iss/disasm.o
+	rm -rf build/vm_single
+	$(VERILATOR) $(VFLAGS) -Mdir build/vm_single --top-module sim_top_single $(SIM_SINGLE)
+	$(call VSIM_CXX,vm_single) -o $@ -lpthread
