@@ -205,3 +205,17 @@ build/sw/dhrystone.elf: $(TP)/riscv-tests/.stamp sw/bench/bench_support.c sw/ben
 	$(LLD) $(RVLDFLAGS) -o $@ $(RT_OBJ) build/sw/dhrystone/*.o
 
 benchmarks: build/sw/coremark.elf build/sw/dhrystone.elf
+
+# --------------------------------------------------------- pipeline viewer
+# Default window: 200 cycles inside the demo's quicksort (calls, returns,
+# data-dependent branches, load-use pairs).  Any window works:
+#   make pipeview PV_PROG=build/sw/coremark.elf PV_FROM=500000 PV_CYCLES=300
+PV_PROG ?= build/sw/demo.elf
+PV_FROM ?= 382600
+PV_CYCLES ?= 200
+.PHONY: pipeview
+pipeview: build/vsim_pipe $(PV_PROG)
+	./build/vsim_pipe --quiet --pipeview build/pipeview.json --pv-from $(PV_FROM) --pv-cycles $(PV_CYCLES) $(PV_PROG)
+	python3 tools/pipeview.py build/pipeview.json -o build/pipeview.html \
+	  --title "$(notdir $(PV_PROG)), cycles $(PV_FROM)-$$(($(PV_FROM)+$(PV_CYCLES)-1)), pipelined core."
+	@echo "open build/pipeview.html in a browser"
