@@ -23,8 +23,6 @@ Also: 673 CARRY4, 48 LUTs used as distributed RAM, block RAM = 0 RAMB36E1 + 0 RA
 | decoder | 112 | 0 | 0 | 0 |
 | load/store alignment | 89 | 0 | 0 | 0 |
 
-Logic-only delay of the longest path (`make sta`): **56.0 ns**, ending at `u_core.u_rf.wd`.
-
 ## Core B: 5-stage pipeline with caches
 
 | Resource | Used | XC7S50 | Share |
@@ -50,8 +48,6 @@ Also: 331 CARRY4, 332 LUTs used as distributed RAM, block RAM = 6 RAMB36E1 + 1 R
 | decoder | 112 | 0 | 0 | 0 |
 | load/store alignment | 89 | 0 | 0 | 0 |
 
-Logic-only delay of the longest path (`make sta`): **8.0 ns**, ending at `u_core.e_result`.
-
 ## What these numbers are not
 
-Yosys maps to 7-series cells but does not place, route or time them, and no open-source flow gives timing sign-off for this part. The delays above come from `make sta`: Yosys' static timing pass over the cell delay models of its Xilinx library, with distributed RAM replaced by flip-flops so that every path has timing arcs, and with no routing delay, which on an FPGA is often half of a path. They are only good for comparing the two cores with each other. Neither core has been run on a real board.
+Yosys maps to 7-series cells but does not place, route or time them, and no open-source flow gives timing sign-off for this part. `make sta` writes a logic-only delay estimate to [timing.md](timing.md), useful only for comparing the two cores. Neither core has been run on a real board.

@@ -58,7 +58,7 @@
 
 核心 B 的條件分支猜對率：CoreMark 91.7%、Dhrystone 91.9%；跳躍和 return：97.2% 和 91.4%。
 管線核心需要的週期數其實**比較多**（CoreMark 是 1.18 倍），它比較快只因為時脈可以快很多。
-Yosys 只算邏輯延遲的估計（`make sta`，沒有繞線、不是 timing sign-off）：核心 A 最長路徑 56.0 ns
+Yosys 只算邏輯延遲的估計（`make sta`，[synth/timing.md](synth/timing.md)，沒有繞線、不是 timing sign-off）：核心 A 最長路徑 56.0 ns
 （經過組合邏輯除法器），核心 B 8.0 ns（經過單週期乘法器），換算 CoreMark 大約快 6 倍。
 這個估計能說明什麼、不能說明什麼，寫在 [docs/report.md](docs/report.md#7-performance)。
 
@@ -140,7 +140,7 @@ make test          # lint + 模型 + 單元 + 系統測試，約 20 秒
 make bench         # 兩顆核心和五種核心 B 變體的效能，約 3 分鐘
 make pipeview      # build/pipeview.html
 make synth         # 兩顆核心的 Yosys 合成，寫出 synth/report.md
-make sta           # 只算邏輯延遲的時序估計（Yosys sta）
+make sta           # 只算邏輯延遲的時序估計，寫出 synth/timing.md
 make mutants       # 突變測試，約 5 分鐘
 make random-one SEED=17 CORE=pipe   # 跑一個隨機程式並輸出 commit trace
 ```

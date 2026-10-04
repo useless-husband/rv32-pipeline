@@ -100,7 +100,7 @@ def main():
     ta, tb = sta_ns("single"), sta_ns("pipe")
     if ta and tb:
         o += ["", f"Estimated run time with the logic-only path delays from `make sta` (core A {ta:.1f} ns, "
-                  f"core B {tb:.1f} ns; no routing, not timing sign-off, see synth/report.md):", ""]
+                  f"core B {tb:.1f} ns; no routing, not timing sign-off, see synth/timing.md):", ""]
         for prog, _ in PROGRAMS:
             a, b = results[("single", prog)]["cycles"] * ta, results[("pipe", prog)]["cycles"] * tb
             o.append(f"- {prog}: {a / 1e6:.2f} ms vs {b / 1e6:.2f} ms, pipelined core about {a / b:.1f}x faster")

@@ -262,7 +262,8 @@ counters were fine, the BTB was too small.
 Core B needs **more** cycles than core A: 1.18x on CoreMark, 1.40x on
 Dhrystone. The pipeline can only win through its clock. Without place and
 route there is no clock frequency to measure, so the best available evidence
-is Yosys' static timing pass over its 7-series cell delay models (`make sta`):
+is Yosys' static timing pass over its 7-series cell delay models (`make sta`,
+[synth/timing.md](../synth/timing.md)):
 logic delay only, no routing, which on an FPGA is often half of a real path.
 
 | | Longest path (logic only) | Ends at |

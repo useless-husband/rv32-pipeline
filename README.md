@@ -78,7 +78,8 @@ Core B: conditional branches predicted correctly 91.7 % (CoreMark) and 91.9 %
 (Dhrystone); jumps and returns 97.2 % and 91.4 %. The pipelined core needs
 **more** cycles than the single-cycle one (1.18x on CoreMark); it is faster only
 because its clock can be much faster. Yosys' logic-only timing estimate
-(`make sta`, no routing, not timing sign-off) puts core A's longest path at
+(`make sta`, [synth/timing.md](synth/timing.md); no routing, not timing
+sign-off) puts core A's longest path at
 56.0 ns (through the combinational divider) and core B's at 8.0 ns (through the
 single-cycle multiplier), which would make core B roughly 6x faster on
 CoreMark. [docs/report.md](docs/report.md#7-performance) explains what that
@@ -179,7 +180,7 @@ make test          # lint + model + unit + system tests, about 20 s
 make bench         # benchmarks on both cores and five core-B variants, ~3 min
 make pipeview      # build/pipeview.html
 make synth         # Yosys synthesis of both cores, writes synth/report.md
-make sta           # logic-only timing estimate (Yosys sta)
+make sta           # logic-only timing estimate, writes synth/timing.md
 make mutants       # mutation check, ~5 min
 make random-one SEED=17 CORE=pipe   # one random program with a commit trace
 ```

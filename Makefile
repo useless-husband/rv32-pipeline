@@ -260,6 +260,8 @@ sta:
 	mkdir -p build/synth/single build/synth/pipe
 	$(YOSYS) -q -l build/synth/single/sta.log synth/sta_single.ys
 	$(YOSYS) -q -l build/synth/pipe/sta.log synth/sta_pipe.ys
+	python3 tools/synth_report.py --timing > synth/timing.md
+	@cat synth/timing.md
 
 # ------------------------------------------------------ mutation checks
 # needs the riscv-tests and random programs from `make system`
