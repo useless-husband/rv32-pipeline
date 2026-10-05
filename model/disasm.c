@@ -1,4 +1,4 @@
-/* Small RV32IM + Zicsr disassembler for traces and the pipeline viewer. */
+/* Small RV32IMFD + Zicsr disassembler for traces and the pipeline viewer. */
 #include <stdio.h>
 
 #include "rv_iss.h"
@@ -12,6 +12,9 @@ static int sx(unsigned v, int bits) { return (int)(v << (32 - bits)) >> (32 - bi
 static const char *csr_name(unsigned a)
 {
     switch (a) {
+    case 0x001: return "fflags";
+    case 0x002: return "frm";
+    case 0x003: return "fcsr";
     case 0x300: return "mstatus";
     case 0x301: return "misa";
     case 0x304: return "mie";
@@ -34,6 +37,46 @@ static const char *csr_name(unsigned a)
     return NULL;
 }
 
+/* F and D: returns 1 if `in` was recognised */
+static int disasm_fp(uint32_t in, char *b, size_t n)
+{
+    unsigned op = in & 0x7f, rd = (in >> 7) & 31, f3 = (in >> 12) & 7, r1 = (in >> 15) & 31,
+             r2 = (in >> 20) & 31, r3 = in >> 27, f5 = in >> 27;
+    char w = ((in >> 25) & 3) ? 'd' : 's';
+    int ii = sx(in >> 20, 12);
+    int is = sx((in >> 25) << 5 | ((in >> 7) & 31), 12);
+    static const char *fma[4] = {"fmadd", "fmsub", "fnmsub", "fnmadd"};
+    static const char *ar[4] = {"fadd", "fsub", "fmul", "fdiv"};
+    static const char *sj[4] = {"fsgnj", "fsgnjn", "fsgnjx", "fsgnj?"};
+    static const char *cm[4] = {"fle", "flt", "feq", "fcmp?"};
+
+    switch (op) {
+    case 0x07: snprintf(b, n, "%s f%u, %d(%s)", f3 == 3 ? "fld" : "flw", rd, ii, R[r1]); return f3 == 2 || f3 == 3;
+    case 0x27: snprintf(b, n, "%s f%u, %d(%s)", f3 == 3 ? "fsd" : "fsw", r2, is, R[r1]); return f3 == 2 || f3 == 3;
+    case 0x43: case 0x47: case 0x4b: case 0x4f:
+        snprintf(b, n, "%s.%c f%u, f%u, f%u, f%u", fma[(op >> 2) & 3], w, rd, r1, r2, r3);
+        return 1;
+    case 0x53:
+        switch (f5) {
+        case 0x00: case 0x01: case 0x02: case 0x03:
+            snprintf(b, n, "%s.%c f%u, f%u, f%u", ar[f5], w, rd, r1, r2); return 1;
+        case 0x0b: snprintf(b, n, "fsqrt.%c f%u, f%u", w, rd, r1); return 1;
+        case 0x04: snprintf(b, n, "%s.%c f%u, f%u, f%u", sj[f3 & 3], w, rd, r1, r2); return 1;
+        case 0x05: snprintf(b, n, "%s.%c f%u, f%u, f%u", f3 ? "fmax" : "fmin", w, rd, r1, r2); return 1;
+        case 0x08: snprintf(b, n, "fcvt.%c.%c f%u, f%u", w, w == 'd' ? 's' : 'd', rd, r1); return 1;
+        case 0x14: snprintf(b, n, "%s.%c %s, f%u, f%u", cm[f3 & 3], w, R[rd], r1, r2); return 1;
+        case 0x18: snprintf(b, n, "fcvt.w%s.%c %s, f%u", r2 ? "u" : "", w, R[rd], r1); return 1;
+        case 0x1a: snprintf(b, n, "fcvt.%c.w%s f%u, %s", w, r2 ? "u" : "", rd, R[r1]); return 1;
+        case 0x1c:
+            if (f3 == 1) snprintf(b, n, "fclass.%c %s, f%u", w, R[rd], r1);
+            else snprintf(b, n, "fmv.x.w %s, f%u", R[rd], r1);
+            return 1;
+        case 0x1e: snprintf(b, n, "fmv.w.x f%u, %s", rd, R[r1]); return 1;
+        }
+    }
+    return 0;
+}
+
 void rv_disasm(uint32_t pc, uint32_t in, char *b, size_t n)
 {
     unsigned op = in & 0x7f, rd = (in >> 7) & 31, f3 = (in >> 12) & 7, r1 = (in >> 15) & 31,
@@ -50,6 +93,8 @@ void rv_disasm(uint32_t pc, uint32_t in, char *b, size_t n)
     static const char *md[8] = {"mul", "mulh", "mulhsu", "mulhu", "div", "divu", "rem", "remu"};
     static const char *cs[8] = {0, "csrrw", "csrrs", "csrrc", 0, "csrrwi", "csrrsi", "csrrci"};
 
+    if (disasm_fp(in, b, n))
+        return;
     switch (op) {
     case 0x37: snprintf(b, n, "lui %s, 0x%x", R[rd], in >> 12); return;
     case 0x17: snprintf(b, n, "auipc %s, 0x%x", R[rd], in >> 12); return;

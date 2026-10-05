@@ -1,7 +1,8 @@
 /* rvsim: run a program on the golden model alone.
  *
- *   rvsim [--trace FILE] [--max-insns N] [--hex FILE] [--quiet] prog.elf
+ *   rvsim [--fpu] [--trace FILE] [--max-insns N] [--hex FILE] [--quiet] prog.elf
  *
+ * --fpu enables the F and D extensions (the model is RV32IM without it).
  * Exit status: the program's exit code (0 = pass), 3 = instruction limit,
  * 4 = model error (access outside RAM and I/O), 5 = usage / load error. */
 #include <stdio.h>
@@ -14,14 +15,15 @@ int main(int argc, char **argv)
 {
     const char *trace = NULL, *hex = NULL, *elf = NULL;
     unsigned long long max = 100000000ull;
-    int quiet = 0;
+    int quiet = 0, fpu = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--trace") && i + 1 < argc) trace = argv[++i];
         else if (!strcmp(argv[i], "--hex") && i + 1 < argc) hex = argv[++i];
         else if (!strcmp(argv[i], "--max-insns") && i + 1 < argc) max = strtoull(argv[++i], NULL, 0);
         else if (!strcmp(argv[i], "--quiet")) quiet = 1;
+        else if (!strcmp(argv[i], "--fpu")) fpu = 1;
         else if (argv[i][0] != '-' && !elf) elf = argv[i];
-        else { fprintf(stderr, "usage: rvsim [--trace FILE] [--max-insns N] [--hex FILE] [--quiet] prog.elf\n"); return 5; }
+        else { fprintf(stderr, "usage: rvsim [--fpu] [--trace FILE] [--max-insns N] [--hex FILE] [--quiet] prog.elf\n"); return 5; }
     }
     if (!elf) { fprintf(stderr, "rvsim: no program given\n"); return 5; }
 
@@ -32,6 +34,7 @@ int main(int argc, char **argv)
         return 0;
     }
     s.echo = !quiet;
+    s.has_fpu = fpu;
     FILE *tf = trace ? fopen(trace, "w") : NULL;
     if (trace && !tf) { fprintf(stderr, "rvsim: cannot write %s\n", trace); return 5; }
 

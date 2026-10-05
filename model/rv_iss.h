@@ -1,5 +1,5 @@
 /* rv_iss: the golden model.  An instruction-set simulator for RV32IM +
- * Zicsr + Zifencei with machine mode only, written to the RISC-V
+ * Zicsr + Zifencei, optionally with F and D (has_fpu), machine mode only, written to the RISC-V
  * specifications and nothing else.  Both RTL cores are checked against it,
  * instruction by instruction.
  *
@@ -25,6 +25,13 @@ typedef struct {
     uint32_t mem_wdata; /* data in its byte lanes */
     uint32_t mem_wmask; /* 4-bit byte-lane mask */
     int nondet;         /* 1: rd_val came from a cycle/hpm counter read */
+    /* F/D (all zero on a model without has_fpu) */
+    int frd_we;         /* 1: wrote floating-point register frd */
+    uint32_t frd;
+    uint64_t frd_val;   /* the whole 64-bit register (singles are NaN-boxed) */
+    uint32_t fflags;    /* exception flags this instruction raised */
+    int mem_dbl;        /* 1: FSD, an 8-byte write: mem_wdata_hi goes to mem_addr + 4 */
+    uint32_t mem_wdata_hi;
 } rv_commit;
 
 typedef struct {
@@ -36,6 +43,11 @@ typedef struct {
     uint32_t mtvec, mscratch, mepc, mcause, mtval;
     uint64_t mcycle, minstret;
     uint64_t hpm[RV_HPM_COUNT];
+    /* F and D extensions: set has_fpu after rv_iss_init() to enable them */
+    int has_fpu;
+    uint64_t f[32];
+    uint32_t frm, fflags;
+    uint32_t fs;        /* mstatus.FS: 0 off, 1 initial, 2 clean, 3 dirty */
     /* I/O */
     char *console;
     size_t console_len, console_cap;

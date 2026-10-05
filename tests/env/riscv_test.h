@@ -1,5 +1,5 @@
-/* Test environment for the official riscv-tests (isa/rv32ui, isa/rv32um) on
- * this platform.  The tests themselves are fetched unmodified at build time;
+/* Test environment for the official riscv-tests (isa/rv32ui, isa/rv32um,
+ * isa/rv32uf, isa/rv32ud) on this platform.  The tests themselves are fetched unmodified at build time;
  * riscv-tests expects every target to supply its own riscv_test.h, and this
  * is ours (machine mode only, results reported through the EXIT register).
  *
@@ -14,6 +14,13 @@
 
 #define RVTEST_RV64U .macro init; .endm
 #define RVTEST_RV32U .macro init; .endm
+/* F/D tests: turn the FPU on (mstatus.FS = initial) and clear fcsr */
+#define RVTEST_RV32UF .macro init; RVTEST_FP_ENABLE; .endm
+#define RVTEST_RV64UF RVTEST_RV32UF
+#define RVTEST_FP_ENABLE                                                \
+        li a0, 0x2000;                                                  \
+        csrs mstatus, a0;                                               \
+        csrwi fcsr, 0
 #define TESTNUM gp
 
 #define RVTEST_CODE_BEGIN                                               \

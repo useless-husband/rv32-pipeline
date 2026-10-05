@@ -1,6 +1,9 @@
-/* Golden model: RV32IM + Zicsr + Zifencei, machine mode only.  See rv_iss.h
- * and docs/DESIGN.md section 2 for the exact list of what is implemented. */
+/* Golden model: RV32IM + Zicsr + Zifencei (+ F and D when has_fpu is set),
+ * machine mode only.  See rv_iss.h and docs/DESIGN.md section 2 for the
+ * exact list of what is implemented.  The floating-point arithmetic itself
+ * is in rv_fp.c. */
 #include "rv_iss.h"
+#include "rv_fp.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -199,8 +202,14 @@ static int csr_read(rv_iss *s, uint32_t a, uint32_t *v)
 {
     uint32_t lo = a & 0x7f, user = (a & 0xf00) == 0xC00;
     switch (a) {
-    case 0x300: *v = s->mie_bit << 3 | s->mpie_bit << 7 | 3u << 11; return 0;
-    case 0x301: *v = 0x40001100u; return 0; /* MXL=32, I, M */
+    case 0x001: case 0x002: case 0x003: /* fflags, frm, fcsr: only while mstatus.FS is on */
+        if (!s->has_fpu || s->fs == 0) return -1;
+        *v = a == 1 ? s->fflags : a == 2 ? s->frm : s->frm << 5 | s->fflags;
+        return 0;
+    case 0x300: /* SD (bit 31) summarises FS == dirty */
+        *v = s->mie_bit << 3 | s->mpie_bit << 7 | 3u << 11 | s->fs << 13 | (uint32_t)(s->fs == 3) << 31;
+        return 0;
+    case 0x301: *v = s->has_fpu ? 0x40001128u : 0x40001100u; return 0; /* MXL=32, I, M (, F, D) */
     case 0x304: case 0x344: *v = 0; return 0; /* mie, mip: no interrupts */
     case 0x305: *v = s->mtvec; return 0;
     case 0x340: *v = s->mscratch; return 0;
@@ -232,7 +241,14 @@ static int csr_write(rv_iss *s, uint32_t a, uint32_t v)
     uint32_t lo = a & 0x7f, hi = a & 0x80;
     uint64_t *ctr = NULL;
     switch (a) {
-    case 0x300: s->mie_bit = (v >> 3) & 1; s->mpie_bit = (v >> 7) & 1; return 0;
+    case 0x001: s->fflags = v & 31; s->fs = 3; return 0;
+    case 0x002: s->frm = v & 7; s->fs = 3; return 0;
+    case 0x003: s->fflags = v & 31; s->frm = (v >> 5) & 7; s->fs = 3; return 0;
+    case 0x300:
+        s->mie_bit = (v >> 3) & 1;
+        s->mpie_bit = (v >> 7) & 1;
+        if (s->has_fpu) s->fs = (v >> 13) & 3;
+        return 0;
     case 0x301: case 0x304: case 0x344: return 0; /* WARL, nothing writable */
     case 0x305: s->mtvec = v & ~3u; return 0;
     case 0x340: s->mscratch = v; return 0;
@@ -288,6 +304,92 @@ static uint32_t muldiv(uint32_t f3, uint32_t a, uint32_t b)
     }
 }
 
+
+/* ------------------------------------------------------------- F and D */
+
+/* A single lives in the low half of a 64-bit f register with all ones above
+ * it (NaN boxing); anything else read as a single is the canonical NaN. */
+static uint32_t unbox(uint64_t v) { return (v >> 32) == 0xffffffffu ? (uint32_t)v : 0x7fc00000u; }
+static uint64_t box(uint32_t v) { return 0xffffffff00000000ull | v; }
+
+/* Executes one OP-FP or fused multiply-add instruction.  Returns 0 if the
+ * encoding is illegal; otherwise sets fw and fres (f register result) or
+ * xw and xres (integer result) and ORs the raised flags into fl. */
+static int fp_exec(rv_iss *s, uint32_t in, int *fw, uint64_t *fres, int *xw, uint32_t *xres, uint32_t *fl)
+{
+    uint32_t op = in & 0x7f, f3 = (in >> 12) & 7, r1 = (in >> 15) & 31, r2 = (in >> 20) & 31,
+             r3 = in >> 27, f7 = in >> 25, fmt = (in >> 25) & 3;
+    int d = fmt == 1;
+    int rm = f3 == 7 ? (int)s->frm : (int)f3;
+    uint64_t a = d ? s->f[r1] : unbox(s->f[r1]);
+    uint64_t b = d ? s->f[r2] : unbox(s->f[r2]);
+    uint64_t c = d ? s->f[r3] : unbox(s->f[r3]);
+    uint64_t r = 0;
+
+    if (fmt > 1)
+        return 0; /* only S and D */
+    if (op != 0x53) { /* FMADD, FMSUB, FNMSUB, FNMADD */
+        if (rm > 4) return 0;
+        r = rvfp_fma(d, a, b, c, op == 0x4b || op == 0x4f, op == 0x47 || op == 0x4f, rm, fl);
+        *fw = 1;
+        *fres = d ? r : box((uint32_t)r);
+        return 1;
+    }
+    switch (f7 >> 2) {
+    case 0x00: case 0x01: case 0x02: case 0x03: /* FADD, FSUB, FMUL, FDIV */
+        if (rm > 4) return 0;
+        r = (f7 >> 2) == 0 ? rvfp_add(d, a, b, rm, fl) : (f7 >> 2) == 1 ? rvfp_sub(d, a, b, rm, fl) :
+            (f7 >> 2) == 2 ? rvfp_mul(d, a, b, rm, fl) : rvfp_div(d, a, b, rm, fl);
+        break;
+    case 0x0b: /* FSQRT */
+        if (r2 != 0 || rm > 4) return 0;
+        r = rvfp_sqrt(d, a, rm, fl);
+        break;
+    case 0x04: { /* FSGNJ, FSGNJN, FSGNJX */
+        uint64_t sb = 1ull << (d ? 63 : 31);
+        if (f3 > 2) return 0;
+        r = (a & ~sb) | (f3 == 0 ? b & sb : f3 == 1 ? ~b & sb : (a ^ b) & sb);
+        break;
+    }
+    case 0x05: /* FMIN, FMAX */
+        if (f3 > 1) return 0;
+        r = rvfp_minmax(d, a, b, f3 == 1, fl);
+        break;
+    case 0x08: /* FCVT.S.D, FCVT.D.S: rs2 names the source format */
+        if (r2 != (uint32_t)!d || rm > 4) return 0;
+        r = rvfp_f2f(d, d ? unbox(s->f[r1]) : s->f[r1], rm, fl);
+        break;
+    case 0x14: /* FLE, FLT, FEQ */
+        if (f3 > 2) return 0;
+        *xw = 1;
+        *xres = (uint32_t)(f3 == 0 ? rvfp_le(d, a, b, fl) : f3 == 1 ? rvfp_lt(d, a, b, fl) : rvfp_eq(d, a, b, fl));
+        return 1;
+    case 0x18: /* FCVT.W, FCVT.WU */
+        if (r2 > 1 || rm > 4) return 0;
+        *xw = 1;
+        *xres = rvfp_f2i(d, a, r2 == 1, rm, fl);
+        return 1;
+    case 0x1a: /* FCVT.S.W, FCVT.S.WU, FCVT.D.W, FCVT.D.WU */
+        if (r2 > 1 || rm > 4) return 0;
+        r = rvfp_i2f(d, s->x[r1], r2 == 1, rm, fl);
+        break;
+    case 0x1c: /* FMV.X.W (singles only: no FMV.X.D on RV32), FCLASS */
+        if (r2 != 0 || !((f3 == 0 && !d) || f3 == 1)) return 0;
+        *xw = 1;
+        *xres = f3 == 0 ? (uint32_t)s->f[r1] : rvfp_classify(d, a);
+        return 1;
+    case 0x1e: /* FMV.W.X */
+        if (r2 != 0 || f3 != 0 || d) return 0;
+        r = s->x[r1];
+        break;
+    default:
+        return 0;
+    }
+    *fw = 1;
+    *fres = d ? r : box((uint32_t)r);
+    return 1;
+}
+
 void rv_step(rv_iss *s, rv_commit *c)
 {
     memset(c, 0, sizeof *c);
@@ -310,8 +412,9 @@ void rv_step(rv_iss *s, rv_commit *c)
                              ((in >> 8) & 15) << 1, 13);
     int32_t imm_j = sext(((in >> 31) & 1) << 20 | ((in >> 12) & 255) << 12 | ((in >> 20) & 1) << 11 |
                              ((in >> 21) & 1023) << 1, 21);
-    uint32_t next = pc + 4, res = 0;
-    int wb = 0, no_count = 0;
+    uint32_t next = pc + 4, res = 0, fl = 0;
+    uint64_t fres = 0;
+    int wb = 0, fwb = 0, no_count = 0;
 
     if ((in & 3) != 3)
         goto illegal;
@@ -362,6 +465,31 @@ void rv_step(rv_iss *s, rv_commit *c)
         store(s, c, addr, b, size);
         break;
     }
+    case 0x07: {                                                        /* FLW, FLD */
+        uint32_t addr = a + (uint32_t)imm_i;
+        if (!s->has_fpu || s->fs == 0 || (f3 != 2 && f3 != 3)) goto illegal;
+        /* FLD is two word accesses: only word alignment is required */
+        if (addr & 3) { trap(s, c, CAUSE_MISALIGNED_LOAD, addr); return; }
+        fres = f3 == 2 ? box(load(s, addr, 4)) : (uint64_t)load(s, addr + 4, 4) << 32 | load(s, addr, 4);
+        fwb = 1; break;
+    }
+    case 0x27: {                                                        /* FSW, FSD */
+        uint32_t addr = a + (uint32_t)imm_s;
+        if (!s->has_fpu || s->fs == 0 || (f3 != 2 && f3 != 3)) goto illegal;
+        if (addr & 3) { trap(s, c, CAUSE_MISALIGNED_STORE, addr); return; }
+        store(s, c, addr, (uint32_t)s->f[r2], 4);
+        if (f3 == 3) {
+            rv_commit hi;
+            memset(&hi, 0, sizeof hi);
+            store(s, &hi, addr + 4, (uint32_t)(s->f[r2] >> 32), 4);
+            c->mem_dbl = 1;
+            c->mem_wdata_hi = hi.mem_wdata;
+        }
+        break;
+    }
+    case 0x43: case 0x47: case 0x4b: case 0x4f: case 0x53:              /* F/D computational */
+        if (!s->has_fpu || s->fs == 0 || !fp_exec(s, in, &fwb, &fres, &wb, &res, &fl)) goto illegal;
+        break;
     case 0x13: {                                                        /* OP-IMM */
         uint32_t sh = r2;
         switch (f3) {
@@ -437,6 +565,17 @@ void rv_step(rv_iss *s, rv_commit *c)
         c->rd = rd;
         c->rd_val = res;
     }
+    if (fwb) {
+        s->f[rd] = fres;
+        c->frd_we = 1;
+        c->frd = rd;
+        c->frd_val = fres;
+    }
+    if (fwb || fl) { /* f register or fflags changed: mstatus.FS = dirty */
+        s->fflags |= fl;
+        s->fs = 3;
+    }
+    c->fflags = fl;
     s->pc = next;
     if (!no_count)
         s->minstret++;
@@ -460,6 +599,13 @@ void rv_format_commit(const rv_commit *c, char *buf, size_t n)
         k += snprintf(buf + k, n - (size_t)k, " trap cause=%u", c->cause);
     if (c->rd_we && (size_t)k < n)
         k += snprintf(buf + k, n - (size_t)k, " x%-2u=%08x", c->rd, c->rd_val);
+    if (c->frd_we && (size_t)k < n)
+        k += snprintf(buf + k, n - (size_t)k, " f%-2u=%08x%08x", c->frd, (uint32_t)(c->frd_val >> 32),
+                      (uint32_t)c->frd_val);
+    if (c->fflags && (size_t)k < n)
+        k += snprintf(buf + k, n - (size_t)k, " fflags|=%02x", c->fflags);
     if (c->mem_we && (size_t)k < n)
-        snprintf(buf + k, n - (size_t)k, " mem[%08x]=%08x/%x", c->mem_addr, c->mem_wdata, c->mem_wmask);
+        k += snprintf(buf + k, n - (size_t)k, " mem[%08x]=%08x/%x", c->mem_addr, c->mem_wdata, c->mem_wmask);
+    if (c->mem_dbl && (size_t)k < n)
+        snprintf(buf + k, n - (size_t)k, " mem[%08x]=%08x/f", c->mem_addr + 4, c->mem_wdata_hi);
 }

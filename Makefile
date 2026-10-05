@@ -24,10 +24,17 @@ RISCV_TESTS_URL := https://github.com/riscv-software-src/riscv-tests
 RISCV_TESTS_SHA := bcffa2b3188b040c611f90dc0b6e422f54775a09
 COREMARK_URL := https://github.com/eembc/coremark
 COREMARK_SHA := 1f483d5b8316753a742cbf5590caf5bd0a4e4777
+SOFTFLOAT_URL := https://github.com/ucb-bar/berkeley-softfloat-3
+SOFTFLOAT_SHA := a0c6494cdc11865811dec815d5c0049fba9d82a8
+TESTFLOAT_URL := https://github.com/ucb-bar/berkeley-testfloat-3
+TESTFLOAT_SHA := a9c849f1b0eb0264b626d9686ffae167d996e3be
 TP := build/third_party
 
 RVARCH := --target=riscv32-unknown-elf -march=rv32im_zicsr_zifencei -mabi=ilp32
 RVCFLAGS := $(RVARCH) -O2 -ffreestanding -fno-builtin -nostdlib -fno-pic -Wall -Isw/runtime -Imodel
+# programs for the core with the FPU (core B, FPU=1): hardware double, doubles passed in f registers
+RVARCH_FD := --target=riscv32-unknown-elf -march=rv32imfd_zicsr_zifencei -mabi=ilp32d
+RVCFLAGS_FD := $(RVARCH_FD) -O2 -ffreestanding -fno-builtin -nostdlib -fno-pic -Wall -Isw/runtime -Imodel
 RVLDFLAGS := -T sw/runtime/link.ld --gc-sections
 
 .PHONY: all iss sw rvtests clean
@@ -37,8 +44,9 @@ all: test
 .SECONDARY:
 
 # ----------------------------------------------------------- golden model
-ISS_SRC := model/rv_iss.c model/disasm.c
-build/rvsim: $(ISS_SRC) model/rvsim.c model/rv_iss.h model/rv_platform.h
+ISS_SRC := model/rv_iss.c model/rv_fp.c model/disasm.c
+ISS_HDR := model/rv_iss.h model/rv_fp.h model/rv_platform.h
+build/rvsim: $(ISS_SRC) model/rvsim.c $(ISS_HDR)
 	@mkdir -p build
 	$(CC) -std=c11 -O2 -Wall -Wextra -o $@ $(ISS_SRC) model/rvsim.c
 
@@ -62,14 +70,21 @@ clean:
 	rm -rf build
 
 # ------------------------------------------------------- riscv-tests (ISA)
-# The lists below are the pinned commit's isa/rv32ui/Makefrag and
-# isa/rv32um/Makefrag; tests/system/test_riscv_tests.py checks they match.
+# The lists below are the pinned commit's isa/rv32{ui,um,uf,ud}/Makefrag;
+# tests/system/test_riscv_tests.py checks they match.  The F and D tests
+# need a core with the FPU (and the golden model with --fpu).
 RV32UI := simple add addi and andi auipc beq bge bgeu blt bltu bne fence_i jal jalr \
           lb lbu lh lhu lw ld_st lui ma_data or ori sb sh sw st_ld sll slli slt slti sltiu sltu \
           sra srai srl srli sub xor xori
 RV32UM := div divu mul mulh mulhsu mulhu rem remu
+RV32UF := fadd fdiv fclass fcmp fcvt fcvt_w fmadd fmin ldst move recoding
+RV32UD := fadd fdiv fclass fcmp fcvt fcvt_w fmadd fmin ldst recoding
 RVTESTS := $(addprefix rv32ui-,$(RV32UI)) $(addprefix rv32um-,$(RV32UM))
-RVTEST_ELFS := $(addprefix build/rvtests/,$(addsuffix .elf,$(RVTESTS)))
+RVTESTS_FD := $(addprefix rv32uf-,$(RV32UF)) $(addprefix rv32ud-,$(RV32UD))
+RVTEST_ELFS := $(addprefix build/rvtests/,$(addsuffix .elf,$(RVTESTS) $(RVTESTS_FD)))
+# rv32uf/rv32ud are assembled with F and D enabled (the integer ABI is kept:
+# the tests are assembly and the trap handler is integer-only C)
+RVT_MARCH = $(if $(filter f-% d-%,$*),-march=rv32imfd_zicsr_zifencei,)
 ENV_OBJ := build/rvtests/env/trap_entry.o build/rvtests/env/trap.o
 
 $(TP)/riscv-tests/.stamp:
@@ -87,7 +102,7 @@ build/rvtests/env/trap.o: tests/env/trap.c model/rv_platform.h
 
 build/rvtests/rv32u%.elf: $(TP)/riscv-tests/.stamp tests/env/riscv_test.h $(ENV_OBJ) sw/runtime/link.ld
 	@mkdir -p build/rvtests
-	$(CLANG) $(RVCFLAGS) -Itests/env -I$(TP)/riscv-tests/isa/macros/scalar \
+	$(CLANG) $(RVCFLAGS) $(RVT_MARCH) -Itests/env -I$(TP)/riscv-tests/isa/macros/scalar \
 	  -c -o build/rvtests/rv32u$*.o $(TP)/riscv-tests/isa/rv32u$(firstword $(subst -, ,$*))/$(lastword $(subst -, ,$*)).S
 	$(LLD) $(RVLDFLAGS) -o $@ build/rvtests/rv32u$*.o $(ENV_OBJ)
 
@@ -97,7 +112,37 @@ rvtests: $(RVTEST_ELFS)
 iss-test: build/rvsim rvtests
 	@pass=0; fail=0; for t in $(RVTESTS); do \
 	  if ./build/rvsim --quiet build/rvtests/$$t.elf; then pass=$$((pass+1)); else echo "FAIL $$t"; fail=$$((fail+1)); fi; \
+	done; for t in $(RVTESTS_FD); do \
+	  if ./build/rvsim --fpu --quiet build/rvtests/$$t.elf; then pass=$$((pass+1)); else echo "FAIL $$t"; fail=$$((fail+1)); fi; \
 	done; echo "golden model: $$pass passed, $$fail failed"; [ $$fail -eq 0 ]
+
+# ------------------------------------------- Berkeley TestFloat (IEEE 754)
+# SoftFloat and TestFloat are fetched and built at pinned commits (never
+# committed); only testfloat_gen, the vector generator, is used.  SoftFloat
+# is built with its RISC-V specialisation (canonical NaNs, RISC-V integer
+# results for invalid conversions).  Their generic "Linux-x86_64-GCC" build
+# directory also works on arm64 and on macOS.
+TFDIR := build/Linux-x86_64-GCC
+TFGEN := $(TP)/berkeley-testfloat-3/$(TFDIR)/testfloat_gen
+$(TFGEN):
+	rm -rf $(TP)/berkeley-softfloat-3 $(TP)/berkeley-testfloat-3
+	mkdir -p $(TP)/berkeley-softfloat-3 $(TP)/berkeley-testfloat-3
+	cd $(TP)/berkeley-softfloat-3 && git init -q && git fetch -q --depth 1 $(SOFTFLOAT_URL) $(SOFTFLOAT_SHA) \
+	  && git checkout -q FETCH_HEAD
+	cd $(TP)/berkeley-testfloat-3 && git init -q && git fetch -q --depth 1 $(TESTFLOAT_URL) $(TESTFLOAT_SHA) \
+	  && git checkout -q FETCH_HEAD
+	$(MAKE) -C $(TP)/berkeley-softfloat-3/$(TFDIR) SPECIALIZE_TYPE=RISCV softfloat.a > $(TP)/softfloat.log 2>&1
+	$(MAKE) -C $(TP)/berkeley-testfloat-3/$(TFDIR) SPECIALIZE_TYPE=RISCV testfloat_gen > $(TP)/testfloat.log 2>&1
+
+build/fp_check: tests/fp/fp_check.c model/rv_fp.c model/rv_fp.h
+	@mkdir -p build
+	$(CC) -std=c11 -O2 -Wall -Wextra -Imodel -o $@ tests/fp/fp_check.c model/rv_fp.c
+
+# the golden model's arithmetic against TestFloat: every operation, both
+# formats, all five rounding modes (about 62 million vectors, under a minute)
+.PHONY: fp-model-test
+fp-model-test: build/fp_check $(TFGEN)
+	python3 tests/fp/testfloat.py --gen $(TFGEN) --check build/fp_check | tee build/fp-model-test.md
 
 # ------------------------------------------------------ Verilator models
 # Two simulators built from the same harness: build/vsim_single (core A) and
@@ -111,13 +156,14 @@ RTL_SINGLE := $(RTL_COMMON) rtl/muldiv_comb.sv rtl/core_single.sv
 SIM_SINGLE := $(RTL_SINGLE) rtl/sim/sim_top_single.sv
 VSIM_CXX = $(CXX) -std=c++17 -O2 -w $(VDEFS) -Imodel -Isim -Ibuild/$(1) -I$(VROOT)/include \
   -I$(VROOT)/include/vltstd build/$(1)/*.cpp $(VROOT)/include/verilated.cpp \
-  $(VROOT)/include/verilated_threads.cpp sim/sim_main.cpp build/iss/rv_iss.o build/iss/disasm.o
+  $(VROOT)/include/verilated_threads.cpp sim/sim_main.cpp build/iss/rv_iss.o build/iss/rv_fp.o build/iss/disasm.o
 
-build/iss/%.o: model/%.c model/rv_iss.h model/rv_platform.h
+ISS_OBJ := build/iss/rv_iss.o build/iss/rv_fp.o build/iss/disasm.o
+build/iss/%.o: model/%.c $(ISS_HDR)
 	@mkdir -p build/iss
 	$(CC) -std=c11 -O2 -Wall -c -o $@ $<
 
-build/vsim_single: $(SIM_SINGLE) rtl/rv_defs.svh sim/sim_main.cpp build/iss/rv_iss.o build/iss/disasm.o
+build/vsim_single: $(SIM_SINGLE) rtl/rv_defs.svh sim/sim_main.cpp $(ISS_OBJ)
 	rm -rf build/vm_single
 	mkdir -p build/vm_single
 	$(VERILATOR) $(VFLAGS) -Mdir build/vm_single --top-module sim_top_single $(SIM_SINGLE)
