@@ -10,7 +10,8 @@ module sim_top_pipe #(
     parameter int BTB_ENTRIES = 128,
     parameter int BHT_ENTRIES = 256,
     parameter int RAS_DEPTH = 8,
-    parameter bit BP_ENABLE = 1'b1
+    parameter bit BP_ENABLE = 1'b1,
+    parameter bit FPU = 1'b0
 ) (
     input  logic        clk,
     input  logic        rst,
@@ -26,6 +27,12 @@ module sim_top_pipe #(
     output logic [31:0] commit_mem_addr,
     output logic [31:0] commit_mem_wdata,
     output logic [3:0]  commit_mem_wmask,
+    output logic        commit_frd_we,
+    output logic [63:0] commit_frd_val,
+    output logic [4:0]  commit_fflags,
+    output logic        commit_mem_dbl,
+    output logic [31:0] commit_mem_wdata_hi,
+    output logic        cfg_fpu,        // tells the harness which golden model to run
     output logic [`NUM_EVENTS-1:0] perf_events,
     output logic        mmio_we,
     output logic [31:0] mmio_addr,
@@ -50,7 +57,7 @@ module sim_top_pipe #(
     logic [15:0]  bus_wstrb;
 
     core_pipe #(.ICACHE_SETS(ICACHE_SETS), .DCACHE_SETS(DCACHE_SETS), .BTB_ENTRIES(BTB_ENTRIES),
-                .BHT_ENTRIES(BHT_ENTRIES), .RAS_DEPTH(RAS_DEPTH), .BP_ENABLE(BP_ENABLE)) u_core (
+                .BHT_ENTRIES(BHT_ENTRIES), .RAS_DEPTH(RAS_DEPTH), .BP_ENABLE(BP_ENABLE), .FPU(FPU)) u_core (
         .clk(clk), .rst(rst),
         .bus_req(bus_req), .bus_we(bus_we), .bus_addr(bus_addr), .bus_wdata(bus_wdata),
         .bus_wstrb(bus_wstrb), .bus_ack(bus_ack), .bus_rdata(bus_rdata),
@@ -58,11 +65,15 @@ module sim_top_pipe #(
         .commit_trap(commit_trap), .commit_cause(commit_cause), .commit_rd_we(commit_rd_we),
         .commit_rd(commit_rd), .commit_rd_val(commit_rd_val), .commit_mem_we(commit_mem_we),
         .commit_mem_addr(commit_mem_addr), .commit_mem_wdata(commit_mem_wdata),
-        .commit_mem_wmask(commit_mem_wmask), .perf_events(perf_events),
+        .commit_mem_wmask(commit_mem_wmask), .commit_frd_we(commit_frd_we),
+        .commit_frd_val(commit_frd_val), .commit_fflags(commit_fflags), .commit_mem_dbl(commit_mem_dbl),
+        .commit_mem_wdata_hi(commit_mem_wdata_hi), .perf_events(perf_events),
         .dbg_f_pc(dbg_f_pc), .dbg_f_seq(dbg_f_seq), .dbg_d_valid(dbg_d_valid), .dbg_d_seq(dbg_d_seq),
         .dbg_d_pc(dbg_d_pc), .dbg_d_insn(dbg_d_insn), .dbg_e_valid(dbg_e_valid), .dbg_e_seq(dbg_e_seq),
         .dbg_m_valid(dbg_m_valid), .dbg_m_seq(dbg_m_seq), .dbg_w_valid(dbg_w_valid),
         .dbg_w_seq(dbg_w_seq), .dbg_why(dbg_why));
+
+    assign cfg_fpu = FPU;
 
     mem_model #(.LATENCY(MEM_LATENCY)) u_mem (
         .clk(clk), .rst(rst), .req(bus_req), .we(bus_we), .addr(bus_addr), .wdata(bus_wdata),

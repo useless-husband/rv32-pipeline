@@ -13,8 +13,8 @@ functions use level 2, whose level 1 has only a few hundred cases.
 The vector sequences are deterministic (TestFloat's own generator, default
 seed), so the totals printed at the end are reproducible.
 
---fma-limit N caps the three-operand vectors per run (0 = all 6,133,248);
---only substr restricts the functions; -j runs that many pipelines at once.
+--only substr restricts the functions; -j runs that many pipelines at once;
+--verbose prints every run (the RTL testbench also reports cycle counts).
 """
 
 import argparse
@@ -43,10 +43,8 @@ def jobs():
     return out
 
 
-def run(gen, check, fn, mode, level, limit):
+def run(gen, check, fn, mode, level):
     g = [gen, f"-r{mode}", "-tininessafter", "-exact", "-level", str(level)]
-    if limit and fn.endswith("mulAdd"):
-        g += ["-n", str(limit)]
     p1 = subprocess.Popen(g + [fn], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     p2 = subprocess.run([check, fn, mode], stdin=p1.stdout, capture_output=True, text=True)
     p1.stdout.close()
@@ -61,7 +59,6 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--gen", required=True)
     ap.add_argument("--check", required=True)
-    ap.add_argument("--fma-limit", type=int, default=0)
     ap.add_argument("--only", default="")
     ap.add_argument("-j", type=int, default=4)
     ap.add_argument("--verbose", action="store_true")
@@ -72,7 +69,7 @@ def main():
     per_fn = {}
     failed = []
     with ThreadPoolExecutor(max_workers=a.j) as ex:
-        for fn, mode, n, mism, text in ex.map(lambda j: run(a.gen, a.check, *j, a.fma_limit), todo):
+        for fn, mode, n, mism, text in ex.map(lambda j: run(a.gen, a.check, *j), todo):
             if a.verbose or mism:
                 print(text, flush=True)
             if mism:

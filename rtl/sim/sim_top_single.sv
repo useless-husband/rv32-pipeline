@@ -19,6 +19,13 @@ module sim_top_single (
     output logic [31:0] commit_mem_addr,
     output logic [31:0] commit_mem_wdata,
     output logic [3:0]  commit_mem_wmask,
+    // F/D commit fields of the shared harness: core A has no FPU
+    output logic        commit_frd_we,
+    output logic [63:0] commit_frd_val,
+    output logic [4:0]  commit_fflags,
+    output logic        commit_mem_dbl,
+    output logic [31:0] commit_mem_wdata_hi,
+    output logic        cfg_fpu,
     output logic [`NUM_EVENTS-1:0] perf_events,
     // I/O register writes, sampled by the harness before the clock edge
     output logic        mmio_we,
@@ -48,6 +55,13 @@ module sim_top_single (
         .commit_rd(commit_rd), .commit_rd_val(commit_rd_val), .commit_mem_we(commit_mem_we),
         .commit_mem_addr(commit_mem_addr), .commit_mem_wdata(commit_mem_wdata),
         .commit_mem_wmask(commit_mem_wmask), .perf_events(perf_events));
+
+    assign commit_frd_we = 1'b0;
+    assign commit_frd_val = 64'd0;
+    assign commit_fflags = 5'd0;
+    assign commit_mem_dbl = 1'b0;
+    assign commit_mem_wdata_hi = 32'd0;
+    assign cfg_fpu = 1'b0;
 
     // RAM is every address with bit 31 set, wrapped to 1 MiB; I/O reads as 0.
     assign imem_rdata = imem_addr[31] ? ram[imem_addr[19:2]] : 32'd0;

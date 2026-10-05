@@ -151,6 +151,8 @@ VROOT := $(shell $(VERILATOR) --getenv VERILATOR_ROOT 2>/dev/null)
 VDEFS := -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TIMING=0 -DVM_TRACE=0 -DVM_TRACE_FST=0 -DVM_TRACE_VCD=0 \
          -DVM_TRACE_SAIF=0
 VFLAGS := --cc -O3 --x-assign fast --x-initial fast --noassert -Irtl --prefix Vtop -Wno-fatal
+FPU_RTL := rtl/fp_unpack.sv rtl/fp_roundup.sv rtl/fp_round.sv rtl/fp_f2i.sv rtl/fp_misc.sv rtl/fp_ds_step.sv \
+           rtl/fp_divsqrt.sv rtl/fp_fma.sv rtl/fpu.sv
 RTL_COMMON := rtl/decoder.sv rtl/alu.sv rtl/regfile.sv rtl/lsu_align.sv rtl/csr_file.sv
 RTL_SINGLE := $(RTL_COMMON) rtl/muldiv_comb.sv rtl/core_single.sv
 SIM_SINGLE := $(RTL_SINGLE) rtl/sim/sim_top_single.sv
@@ -170,7 +172,7 @@ build/vsim_single: $(SIM_SINGLE) rtl/rv_defs.svh sim/sim_main.cpp $(ISS_OBJ)
 	$(call VSIM_CXX,vm_single) -o $@ -lpthread
 
 RTL_PIPE := $(RTL_COMMON) rtl/bpred.sv rtl/divider.sv rtl/mem_arbiter.sv rtl/icache.sv rtl/dcache.sv \
-            rtl/core_pipe.sv
+            $(FPU_RTL) rtl/fp_regfile.sv rtl/core_pipe.sv
 SIM_PIPE := $(RTL_PIPE) rtl/sim/mem_model.sv rtl/sim/sim_top_pipe.sv
 # extra -G overrides for the pipelined simulator, e.g. PIPE_G="-GMEM_LATENCY=50"
 PIPE_G ?=
@@ -181,10 +183,39 @@ build/vsim_pipe: $(SIM_PIPE) rtl/rv_defs.svh sim/sim_main.cpp sim/pipeview.inc b
 	$(VERILATOR) $(VFLAGS) -Mdir build/vm_pipe --top-module sim_top_pipe $(PIPE_G) $(SIM_PIPE)
 	$(call VSIM_CXX,vm_pipe) -DHAVE_PIPEVIEW -o $@ -lpthread
 
+# ------------------------------------------------- FPU unit testbench
+# rtl/fpu.sv alone under Verilator, against TestFloat vectors and against
+# the golden model's arithmetic on random operands (tests/fp/fpu_tb.cpp).
+build/fpu_tb: $(FPU_RTL) rtl/rv_defs.svh tests/fp/fpu_tb.cpp build/iss/rv_fp.o
+	rm -rf build/vm_fpu
+	mkdir -p build/vm_fpu
+	$(VERILATOR) --cc -O3 --x-assign fast --x-initial fast --noassert -Irtl --prefix Vfpu -Wno-fatal \
+	  -Mdir build/vm_fpu --top-module fpu $(FPU_RTL)
+	$(CXX) -std=c++17 -O2 -w $(VDEFS) -Imodel -Ibuild/vm_fpu -I$(VROOT)/include -I$(VROOT)/include/vltstd \
+	  build/vm_fpu/*.cpp $(VROOT)/include/verilated.cpp $(VROOT)/include/verilated_threads.cpp \
+	  tests/fp/fpu_tb.cpp build/iss/rv_fp.o -o $@ -lpthread
+
+# every TestFloat vector the model is checked with, through the RTL (a few
+# minutes), then two million random operations of every kind
+FPU_RANDOM ?= 2000000
+.PHONY: fpu-unit
+fpu-unit: build/fpu_tb $(TFGEN)
+	python3 tests/fp/testfloat.py --gen $(TFGEN) --check build/fpu_tb | tee build/fpu-unit.md
+	./build/fpu_tb --random $(FPU_RANDOM) 1 | tee -a build/fpu-unit.md
+
+# core B with the FPU (RV32IMFD): the same sources, FPU = 1
+build/vsim_pipe_fd: $(SIM_PIPE) rtl/rv_defs.svh sim/sim_main.cpp sim/pipeview.inc $(ISS_OBJ)
+	rm -rf build/vm_pipe_fd
+	mkdir -p build/vm_pipe_fd
+	$(VERILATOR) $(VFLAGS) -Mdir build/vm_pipe_fd --top-module sim_top_pipe -GFPU=1 $(PIPE_G) $(SIM_PIPE)
+	$(call VSIM_CXX,vm_pipe_fd) -DHAVE_PIPEVIEW -o $@ -lpthread
+
 # ------------------------------------------------------------------ lint
 lint:
 	$(VERILATOR) --lint-only -Wall -Irtl --top-module sim_top_single $(SIM_SINGLE)
 	$(VERILATOR) --lint-only -Wall -Irtl --top-module sim_top_pipe $(SIM_PIPE)
+	$(VERILATOR) --lint-only -Wall -Irtl --top-module sim_top_pipe -GFPU=1 $(SIM_PIPE)
+	$(VERILATOR) --lint-only -Wall -Irtl --top-module fpu $(FPU_RTL)
 	@echo "lint: verilator -Wall clean"
 
 # ----------------------------------------------------------------- tests

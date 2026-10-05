@@ -94,6 +94,13 @@ static rv_commit dut_commit(const Vtop *t)
     for (int b = 0; b < 4; b++)
         if ((c.mem_wmask >> b) & 1) lanes |= 0xffu << (8 * b);
     c.mem_wdata = c.mem_we ? (t->commit_mem_wdata & lanes) : 0;
+    // F and D (constant zero on a core without the FPU)
+    c.frd_we = t->commit_frd_we;
+    c.frd = c.frd_we ? t->commit_rd : 0;
+    c.frd_val = c.frd_we ? t->commit_frd_val : 0;
+    c.fflags = c.trap ? 0 : t->commit_fflags;
+    c.mem_dbl = c.mem_we && t->commit_mem_dbl;
+    c.mem_wdata_hi = c.mem_dbl ? t->commit_mem_wdata_hi : 0;
     return c;
 }
 
@@ -101,7 +108,9 @@ static bool same(const rv_commit &a, const rv_commit &b)
 {
     return a.pc == b.pc && a.insn == b.insn && a.trap == b.trap && a.cause == b.cause && a.rd_we == b.rd_we &&
            a.rd == b.rd && a.rd_val == b.rd_val && a.mem_we == b.mem_we && a.mem_addr == b.mem_addr &&
-           a.mem_wdata == b.mem_wdata && a.mem_wmask == b.mem_wmask;
+           a.mem_wdata == b.mem_wdata && a.mem_wmask == b.mem_wmask && a.frd_we == b.frd_we &&
+           a.frd == b.frd && a.frd_val == b.frd_val && a.fflags == b.fflags && a.mem_dbl == b.mem_dbl &&
+           a.mem_wdata_hi == b.mem_wdata_hi;
 }
 
 #ifdef HAVE_PIPEVIEW
@@ -129,6 +138,8 @@ int main(int argc, char **argv)
     auto ctx = std::make_unique<VerilatedContext>();
     ctx->commandArgs(2, vargs);
     auto top = std::make_unique<Vtop>(ctx.get());
+    top->eval();
+    iss.has_fpu = top->cfg_fpu; // the golden model implements what the core was built with
 
     FILE *trace = opt.trace.empty() ? nullptr : std::fopen(opt.trace.c_str(), "w");
 #ifdef HAVE_PIPEVIEW
@@ -156,7 +167,7 @@ int main(int argc, char **argv)
     uint64_t exit_cycle = 0;
     int status = -1;
     std::vector<std::string> recent; // last few commits, printed on a mismatch
-    char line[256];
+    char line[320];
 
     while (status < 0) {
         top->clk = 0;
@@ -180,7 +191,7 @@ int main(int argc, char **argv)
                     break;
                 }
                 if (!same(d, m)) {
-                    char ml[256];
+                    char ml[320];
                     rv_format_commit(&m, ml, sizeof ml);
                     std::fprintf(stderr, "\nLOCKSTEP MISMATCH at commit %" PRIu64 ", cycle %" PRIu64 "\n", commits, cycle);
                     std::fprintf(stderr, "  last matching commits:\n");

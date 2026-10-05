@@ -51,13 +51,19 @@ module core_single (
     assign insn = imem_rdata;
     assign imem_addr = pc;
 
+    logic [21:0] fp_unused;
+
     decoder u_dec (
         .insn(insn), .alu_op(alu_op), .a_sel(a_sel), .b_imm(b_imm), .imm(imm),
         .rd(rd), .rs1(rs1), .rs2(rs2), .uses_rs1(uses_rs1), .uses_rs2(uses_rs2), .rd_we(rd_we),
         .wb_sel(wb_sel), .funct3(funct3), .is_branch(is_branch), .is_jal(is_jal), .is_jalr(is_jalr),
         .is_load(is_load), .is_store(is_store), .is_mdu(is_mdu), .is_div(is_div), .is_csr(is_csr),
         .csr_writes(csr_writes), .is_ecall(is_ecall), .is_ebreak(is_ebreak), .is_mret(is_mret),
-        .is_fencei(is_fencei), .illegal(dec_illegal));
+        .is_fencei(is_fencei), .illegal(dec_illegal),
+        // F and D exist on core B only (the decoder's FPU parameter stays 0 here)
+        .rs3(fp_unused[4:0]), .is_fp(fp_unused[5]), .fp_unit(fp_unused[6]), .fp_op(fp_unused[11:7]),
+        .fp_dbl(fp_unused[12]), .fp_rm_dyn(fp_unused[13]), .uses_frs1(fp_unused[14]),
+        .uses_frs2(fp_unused[15]), .uses_frs3(fp_unused[16]), .frd_we(fp_unused[17]));
 
     // -------------------------------------------------------------- register
     logic [31:0] x1, x2, wb_val;
@@ -141,7 +147,8 @@ module core_single (
         .writes_instret(writes_instret),
         .trap(exc && !rst), .trap_pc(pc), .trap_cause(exc_cause), .trap_tval(exc_tval),
         .mret(is_mret && !rst), .mtvec(mtvec), .mepc(mepc),
-        .instret_inc(!exc && !rst && !writes_instret), .events(perf_events));
+        .instret_inc(!exc && !rst && !writes_instret), .events(perf_events),
+        .fp_flags(5'd0), .fp_flags_we(1'b0), .fp_dirty(1'b0), .frm(fp_unused[20:18]), .fs_off(fp_unused[21]));
 
     // ------------------------------------------------------------- write back
     always_comb begin
@@ -190,5 +197,5 @@ module core_single (
 
     // unused decode outputs in this core
     logic unused;
-    assign unused = &{1'b0, uses_rs1, uses_rs2, is_div, is_mdu, is_fencei, imm[0]};
+    assign unused = &{1'b0, uses_rs1, uses_rs2, is_div, is_mdu, is_fencei, imm[0], fp_unused};
 endmodule
