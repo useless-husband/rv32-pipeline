@@ -66,6 +66,15 @@ build/sw/%.elf: sw/demo/%.c $(RT_OBJ) sw/runtime/link.ld
 
 sw: build/sw/hello.elf build/sw/demo.elf
 
+# the same runtime for programs that use the FPU (hardware double ABI)
+RT_OBJ_FD := build/sw_fd/crt0.o build/sw_fd/rt.o
+build/sw_fd/crt0.o: sw/runtime/crt0.S model/rv_platform.h
+	@mkdir -p build/sw_fd
+	$(CLANG) $(RVCFLAGS_FD) -c -o $@ $<
+build/sw_fd/rt.o: sw/runtime/rt.c sw/runtime/rt.h model/rv_platform.h
+	@mkdir -p build/sw_fd
+	$(CLANG) $(RVCFLAGS_FD) -c -o $@ $<
+
 clean:
 	rm -rf build
 
@@ -295,6 +304,45 @@ build/sw/dhrystone.elf: $(TP)/riscv-tests/.stamp sw/bench/bench_support.c sw/ben
 	$(LLD) $(RVLDFLAGS) -o $@ $(RT_OBJ) build/sw/dhrystone/*.o
 
 benchmarks: build/sw/coremark.elf build/sw/dhrystone.elf
+
+# -------------------------------------------- floating-point benchmark
+# sw/bench/fpbench is built three ways: software floating point for RV32IM
+# (compiler-rt's routines, fetched at a pinned LLVM commit, never committed),
+# hardware floating point, and hardware with fused multiply-add contraction.
+CRT_URL := https://github.com/llvm/llvm-project
+CRT_SHA := 85ac560262434c9ccfc0c183ec22d4138ed647fb
+CRT_DIR := $(TP)/llvm/compiler-rt/lib/builtins
+CRT_FUNCS := adddf3 subdf3 muldf3 divdf3 comparedf2 fixdfsi floatsidf floatunsidf addsf3 subsf3 mulsf3 divsf3 \
+             comparesf2 floatsisf floatunsisf fixsfsi extendsfdf2 truncdfsf2 clzsi2 clzdi2 fp_mode
+CRT_OBJ := $(addprefix build/crt/,$(addsuffix .o,$(CRT_FUNCS)))
+
+$(TP)/llvm/.stamp:
+	rm -rf $(TP)/llvm && mkdir -p $(TP)/llvm
+	cd $(TP)/llvm && git init -q && git remote add origin $(CRT_URL) \
+	  && git config core.sparseCheckout true \
+	  && git sparse-checkout set --no-cone compiler-rt/lib/builtins/ compiler-rt/LICENSE.TXT \
+	  && git fetch -q --depth 1 --filter=blob:none origin $(CRT_SHA) && git checkout -q FETCH_HEAD
+	@touch $@
+
+build/crt/%.o: $(TP)/llvm/.stamp
+	@mkdir -p build/crt
+	$(CLANG) $(RVARCH) -O2 -ffreestanding -nostdlib -fno-pic -w -I$(CRT_DIR) -c -o $@ $(CRT_DIR)/$*.c
+
+FPB_SRC := sw/bench/fpbench/fpbench.c
+build/sw/fpbench-soft.elf: $(FPB_SRC) $(RT_OBJ) $(CRT_OBJ) sw/runtime/link.ld
+	$(CLANG) $(RVCFLAGS) -ffp-contract=off -c -o build/sw/fpbench-soft.o $(FPB_SRC)
+	$(LLD) $(RVLDFLAGS) -o $@ $(RT_OBJ) build/sw/fpbench-soft.o $(CRT_OBJ)
+build/sw/fpbench-hard.elf: $(FPB_SRC) $(RT_OBJ_FD) sw/runtime/link.ld
+	$(CLANG) $(RVCFLAGS_FD) -fno-math-errno -ffp-contract=off -c -o build/sw_fd/fpbench-hard.o $(FPB_SRC)
+	$(LLD) $(RVLDFLAGS) -o $@ $(RT_OBJ_FD) build/sw_fd/fpbench-hard.o
+build/sw/fpbench-fma.elf: $(FPB_SRC) $(RT_OBJ_FD) sw/runtime/link.ld
+	$(CLANG) $(RVCFLAGS_FD) -fno-math-errno -ffp-contract=fast -c -o build/sw_fd/fpbench-fma.o $(FPB_SRC)
+	$(LLD) $(RVLDFLAGS) -o $@ $(RT_OBJ_FD) build/sw_fd/fpbench-fma.o
+
+FPB_ELFS := build/sw/fpbench-soft.elf build/sw/fpbench-hard.elf build/sw/fpbench-fma.elf
+.PHONY: fp-bench
+fp-bench: build/vsim_pipe build/vsim_pipe_fd build/fpu_tb $(FPB_ELFS)
+	python3 tools/fpbench.py | tee build/fp-bench.md
 
 # pipelined-core variants for the measurements (each is its own Verilator build)
 G_nobp := -GBP_ENABLE=0

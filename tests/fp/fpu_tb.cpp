@@ -39,11 +39,10 @@ static const char *kOpNames[NOPS] = {"add", "sub", "mul", "madd", "msub", "nmsub
 struct Tb {
     std::unique_ptr<VerilatedContext> ctx{new VerilatedContext};
     std::unique_ptr<Vfpu> top{new Vfpu(ctx.get())};
-    uint64_t lat_min[NOPS], lat_max[NOPS];
+    uint64_t hist[NOPS][2][128] = {}; // runs per (operation, format, cycles)
 
     Tb()
     {
-        for (int i = 0; i < NOPS; i++) { lat_min[i] = ~0ull; lat_max[i] = 0; }
         top->start = 0; top->kill = 0; top->ack = 0;
         top->rst = 1;
         for (int i = 0; i < 3; i++) tick();
@@ -73,8 +72,7 @@ struct Tb {
         tick();
         top->ack = 0; top->start = 0;
         top->eval();
-        if (cycles < lat_min[op]) lat_min[op] = cycles;
-        if (cycles > lat_max[op]) lat_max[op] = cycles;
+        hist[op][dbl][cycles < 127 ? cycles : 127]++;
         return cycles;
     }
 };
@@ -184,7 +182,7 @@ static uint64_t rnd_fp(int d)
 static int random_ops(Tb &tb, uint64_t count, uint64_t seed)
 {
     rng_state = seed * 0x9E3779B97F4A7C15ull + 1;
-    uint64_t bad = 0, per_op[NOPS] = {0};
+    uint64_t bad = 0;
     for (uint64_t i = 0; i < count; i++) {
         int op = (int)(rnd() % NOPS), d = (int)(rnd() & 1), rm = (int)(rnd() % 5);
         uint64_t a = rnd_fp(d), b = (rnd() % 8 == 0) ? a : rnd_fp(d), c = rnd_fp(d);
@@ -231,19 +229,33 @@ static int random_ops(Tb &tb, uint64_t count, uint64_t seed)
         default: d = 0; want = ia; break; // MVWX
         }
         tb.run(op, d, rm, ra, rb, rc, ia, &res, &ires, &fl);
-        per_op[op]++;
         bool ok = fl == wfl && (is_int ? ires == iwant : res == box(d, want));
         if (!ok && bad++ < 5)
             std::fprintf(stderr, "MISMATCH %s d=%d rm=%d a=%016" PRIx64 " b=%016" PRIx64 " c=%016" PRIx64
                          " ia=%08x: got %016" PRIx64 "/%08x flags %02x, want %016" PRIx64 "/%08x flags %02x\n",
                          kOpNames[op], d, rm, ra, rb, rc, ia, res, ires, fl, box(d, want), iwant, wfl);
     }
-    std::printf("| Operation | Runs | Cycles in EX |\n|---|---:|---:|\n");
+    // latency per operation and format
+    std::printf("| Operation | Format | Runs | Cycles in EX, ordinary operands | Range |\n|---|---|---:|---:|---:|\n");
     for (int i = 0; i < NOPS; i++) {
-        if (tb.lat_min[i] == tb.lat_max[i])
-            std::printf("| %s | %" PRIu64 " | %" PRIu64 " |\n", kOpNames[i], per_op[i], tb.lat_min[i]);
-        else
-            std::printf("| %s | %" PRIu64 " | %" PRIu64 "-%" PRIu64 " |\n", kOpNames[i], per_op[i], tb.lat_min[i], tb.lat_max[i]);
+        for (int d = 0; d < 2; d++) {
+            uint64_t runs = 0, best = 0;
+            int lo = -1, hi = 0, mode = 0;
+            for (int c = 0; c < 128; c++) {
+                uint64_t h = tb.hist[i][d][c];
+                if (!h) continue;
+                runs += h;
+                if (lo < 0) lo = c;
+                hi = c;
+            }
+            // "ordinary operands": the most common count once the shortcut for
+            // results that need no arithmetic (the minimum) is set aside
+            for (int c = (lo == hi ? lo : lo + 1); c <= hi; c++)
+                if (tb.hist[i][d][c] > best) { best = tb.hist[i][d][c]; mode = c; }
+            if (runs)
+                std::printf("| %s | %s | %" PRIu64 " | %d | %d-%d |\n", kOpNames[i], d ? "double" : "single", runs,
+                            mode, lo, hi);
+        }
     }
     std::printf("\nrandom seed %" PRIu64 ": %" PRIu64 " vectors, %" PRIu64 " mismatches\n", seed, count, bad);
     return bad != 0;

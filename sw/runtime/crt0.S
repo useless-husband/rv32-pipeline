@@ -16,6 +16,13 @@ _start:
         la sp, __stack_top
         la t0, rt_trap_entry
         csrw mtvec, t0
+#ifdef __riscv_flen
+        /* built for a core with the FPU: turn it on (mstatus.FS = initial),
+         * round to nearest, no flags */
+        li t0, 0x2000
+        csrs mstatus, t0
+        csrwi fcsr, 0
+#endif
         la t0, __bss_start
         la t1, __bss_end
 1:      bgeu t0, t1, 2f
