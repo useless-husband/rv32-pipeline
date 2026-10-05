@@ -177,7 +177,7 @@ SIM_PIPE := $(RTL_PIPE) rtl/sim/mem_model.sv rtl/sim/sim_top_pipe.sv
 # extra -G overrides for the pipelined simulator, e.g. PIPE_G="-GMEM_LATENCY=50"
 PIPE_G ?=
 
-build/vsim_pipe: $(SIM_PIPE) rtl/rv_defs.svh sim/sim_main.cpp sim/pipeview.inc build/iss/rv_iss.o build/iss/disasm.o
+build/vsim_pipe: $(SIM_PIPE) rtl/rv_defs.svh sim/sim_main.cpp sim/pipeview.inc $(ISS_OBJ)
 	rm -rf build/vm_pipe
 	mkdir -p build/vm_pipe
 	$(VERILATOR) $(VFLAGS) -Mdir build/vm_pipe --top-module sim_top_pipe $(PIPE_G) $(SIM_PIPE)
@@ -304,7 +304,7 @@ G_lat1 := -GMEM_LATENCY=1
 G_lat30 := -GMEM_LATENCY=30
 VARIANTS := nobp noras ic8k lat1 lat30
 
-build/vsim_pipe-%: $(SIM_PIPE) rtl/rv_defs.svh sim/sim_main.cpp sim/pipeview.inc build/iss/rv_iss.o build/iss/disasm.o
+build/vsim_pipe-%: $(SIM_PIPE) rtl/rv_defs.svh sim/sim_main.cpp sim/pipeview.inc $(ISS_OBJ)
 	rm -rf build/vm_pipe-$*
 	mkdir -p build/vm_pipe-$*
 	$(VERILATOR) $(VFLAGS) -Mdir build/vm_pipe-$* --top-module sim_top_pipe $(G_$*) $(SIM_PIPE)
@@ -348,5 +348,5 @@ sta:
 # ------------------------------------------------------ mutation checks
 # needs the riscv-tests and random programs from `make system`
 .PHONY: mutants
-mutants: check-python
+mutants: check-python $(TFGEN)
 	$(PYTHON) tools/mutate.py | tee build/mutants.md

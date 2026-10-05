@@ -504,6 +504,30 @@ class FpGen(Gen):
     def fs_on(self):
         self.emit(f"li x29, {self.r.choice([0x2000, 0x4000, 0x6000])}")
         self.emit("csrs mstatus, x29")
+        if self.r.random() < 0.6:  # a write to an f register alone must make FS dirty
+            f = self.r.randrange(32)
+            self.emit(f"fsgnj.d f{f}, f{f}, f{f}")
+            self.emit(f"csrr x{self.dst()}, mstatus")
+
+    def selfmod(self):
+        """Half of the time the replaced instruction is a divide or square
+        root: it is in EX, started, when FENCE.I flushes it, and what runs
+        instead is a different F/D instruction."""
+        if self.r.random() < 0.5:
+            return super().selfmod()
+        target = self.lab()
+        rd, rs1, rs2 = self.fdst("d"), self.fsrc("d"), self.fsrc("d")
+        enc = (0x01 << 25) | (rs2 << 20) | (rs1 << 15) | (self.r.choice([0, 1, 2, 3, 4]) << 12) | (rd << 7) | 0x53
+        enc |= self.r.choice([0, 1, 2]) << 27       # fadd.d / fsub.d / fmul.d
+        self.emit(f"la x29, {target}")
+        self.emit(f"li x30, {enc}")
+        self.emit("sw x30, 0(x29)")
+        self.emit("fence.i")
+        self.out.append(f"{target}:")
+        if self.r.random() < 0.5:
+            self.emit(f"fdiv.d f{self.r.randrange(32)}, f{self.fsrc('d')}, f{self.fsrc('d')}  # replaced at run time")
+        else:
+            self.emit(f"fsqrt.d f{self.r.randrange(32)}, f{self.fsrc('d')}  # replaced at run time")
 
     def shadow(self, n):
         for _ in range(n):

@@ -13,7 +13,8 @@ functions use level 2, whose level 1 has only a few hundred cases.
 The vector sequences are deterministic (TestFloat's own generator, default
 seed), so the totals printed at the end are reproducible.
 
---only substr restricts the functions; -j runs that many pipelines at once;
+--only substr restricts the functions, --skip substr leaves some out (the
+mutation check skips the long mulAdd runs); -j runs that many pipelines at once;
 --verbose prints every run (the RTL testbench also reports cycle counts).
 """
 
@@ -60,11 +61,12 @@ def main():
     ap.add_argument("--gen", required=True)
     ap.add_argument("--check", required=True)
     ap.add_argument("--only", default="")
+    ap.add_argument("--skip", default="")
     ap.add_argument("-j", type=int, default=4)
     ap.add_argument("--verbose", action="store_true")
     a = ap.parse_args()
 
-    todo = [j for j in jobs() if a.only in j[0]]
+    todo = [j for j in jobs() if a.only in j[0] and not (a.skip and a.skip in j[0])]
     total = bad = 0
     per_fn = {}
     failed = []
