@@ -1,5 +1,5 @@
 // Instruction decoder for RV32IM + Zicsr + Zifencei (machine mode), plus F
-// and D when FPU = 1.  Purely combinational; shared by both cores.  An
+// and D when FPU = 1 (with FPU = 0 their opcodes are illegal as before).  Purely combinational; shared by both cores.  An
 // illegal encoding clears every side-effect output (no register write, no
 // memory access) and sets `illegal`.  Whether a CSR number exists is decided
 // by csr_file, not here.  Two F/D checks depend on CSR state and are made in
@@ -52,8 +52,9 @@ module decoder #(
     logic [6:0] opcode, funct7;
     logic [31:0] imm_i, imm_s, imm_b, imm_u, imm_j;
     logic writes, legal;
-    logic fwrites, fmt_ok, rm_ok, rm_used, fop_ok;
-    logic [4:0] funct5;
+    logic fwrites, rm_used;
+    logic fp_hit, fp_legal, fp_unit_i, fp_fwrites, fp_frs1, fp_frs2, fp_frs3, fp_rm_used;
+    logic fp_load, fp_store, fp_xrs1, fp_xwrites;
 
     assign opcode = insn[6:0];
     assign funct3 = insn[14:12];
@@ -62,9 +63,31 @@ module decoder #(
     assign rs1    = insn[19:15];
     assign rs2    = insn[24:20];
     assign rs3    = insn[31:27];
-    assign funct5 = insn[31:27];
-    assign fmt_ok = (insn[26] == 1'b0);                       // S (00) or D (01)
-    assign rm_ok  = (funct3 <= 3'b100) || (funct3 == 3'b111); // 101 and 110 are reserved
+
+    generate
+        if (FPU) begin : g_fp
+            fp_decoder u_fp (
+                .insn(insn), .hit(fp_hit), .legal(fp_legal), .fp_unit(fp_unit_i), .fp_op(fp_op),
+                .fp_dbl(fp_dbl), .rm_used(fp_rm_used), .fwrites(fp_fwrites), .uses_frs1(fp_frs1),
+                .uses_frs2(fp_frs2), .uses_frs3(fp_frs3), .is_load(fp_load), .is_store(fp_store),
+                .uses_xrs1(fp_xrs1), .xwrites(fp_xwrites));
+        end else begin : g_no_fp
+            assign fp_hit = 1'b0;
+            assign fp_legal = 1'b0;
+            assign fp_unit_i = 1'b0;
+            assign fp_op = 5'd0;
+            assign fp_dbl = 1'b0;
+            assign fp_rm_used = 1'b0;
+            assign fp_fwrites = 1'b0;
+            assign fp_frs1 = 1'b0;
+            assign fp_frs2 = 1'b0;
+            assign fp_frs3 = 1'b0;
+            assign fp_load = 1'b0;
+            assign fp_store = 1'b0;
+            assign fp_xrs1 = 1'b0;
+            assign fp_xwrites = 1'b0;
+        end
+    endgenerate
 
     assign imm_i = {{20{insn[31]}}, insn[31:20]};
     assign imm_s = {{20{insn[31]}}, insn[31:25], insn[11:7]};
@@ -95,14 +118,11 @@ module decoder #(
         legal = 1'b0;
         is_fp = 1'b0;
         fp_unit = 1'b0;
-        fp_op = `FOP_ADD;
-        fp_dbl = insn[25];
         fwrites = 1'b0;
         uses_frs1 = 1'b0;
         uses_frs2 = 1'b0;
         uses_frs3 = 1'b0;
         rm_used = 1'b0;
-        fop_ok = 1'b0;
 
         case (opcode)
             7'b0110111: begin // LUI
@@ -181,76 +201,27 @@ module decoder #(
                     uses_rs1 = !funct3[2];
                 end
             end
-            7'b0000111: begin // FLW, FLD (FLD is two word accesses)
-                legal = FPU && (funct3 == 3'b010 || funct3 == 3'b011);
-                is_fp = 1'b1; is_load = 1'b1; uses_rs1 = 1'b1; fwrites = 1'b1; wb_sel = `WB_MEM;
-                fp_dbl = funct3[0];
-            end
-            7'b0100111: begin // FSW, FSD
-                legal = FPU && (funct3 == 3'b010 || funct3 == 3'b011);
-                is_fp = 1'b1; is_store = 1'b1; uses_rs1 = 1'b1; uses_frs2 = 1'b1; imm = imm_s;
-                fp_dbl = funct3[0];
-            end
-            7'b1000011, 7'b1000111, 7'b1001011, 7'b1001111: begin // FMADD, FMSUB, FNMSUB, FNMADD
-                legal = FPU && fmt_ok && rm_ok;
-                is_fp = 1'b1; fp_unit = 1'b1; fwrites = 1'b1; rm_used = 1'b1;
-                uses_frs1 = 1'b1; uses_frs2 = 1'b1; uses_frs3 = 1'b1;
-                fp_op = `FOP_MADD + {3'b000, opcode[3:2]};
-            end
-            7'b1010011: begin // OP-FP
-                is_fp = 1'b1; fp_unit = 1'b1;
-                case (funct5)
-                    5'b00000, 5'b00001, 5'b00010, 5'b00011: begin // FADD, FSUB, FMUL, FDIV
-                        fop_ok = 1'b1; fwrites = 1'b1; rm_used = 1'b1; uses_frs1 = 1'b1; uses_frs2 = 1'b1;
-                        fp_op = (funct5[1:0] == 2'b00) ? `FOP_ADD : (funct5[1:0] == 2'b01) ? `FOP_SUB :
-                                (funct5[1:0] == 2'b10) ? `FOP_MUL : `FOP_DIV;
-                    end
-                    5'b01011: begin // FSQRT
-                        fop_ok = (rs2 == 5'd0); fwrites = 1'b1; rm_used = 1'b1; uses_frs1 = 1'b1;
-                        fp_op = `FOP_SQRT;
-                    end
-                    5'b00100: begin // FSGNJ, FSGNJN, FSGNJX
-                        fop_ok = (funct3 <= 3'b010); fwrites = 1'b1; uses_frs1 = 1'b1; uses_frs2 = 1'b1;
-                        fp_op = (funct3[1:0] == 2'b00) ? `FOP_SGNJ : (funct3[1:0] == 2'b01) ? `FOP_SGNJN : `FOP_SGNJX;
-                    end
-                    5'b00101: begin // FMIN, FMAX
-                        fop_ok = (funct3 <= 3'b001); fwrites = 1'b1; uses_frs1 = 1'b1; uses_frs2 = 1'b1;
-                        fp_op = funct3[0] ? `FOP_MAX : `FOP_MIN;
-                    end
-                    5'b01000: begin // FCVT.S.D (rs2 = 1), FCVT.D.S (rs2 = 0): rs2 names the source format
-                        fop_ok = (rs2 == {4'b0000, !insn[25]}); fwrites = 1'b1; rm_used = 1'b1; uses_frs1 = 1'b1;
-                        fp_op = `FOP_F2F;
-                    end
-                    5'b10100: begin // FLE, FLT, FEQ
-                        fop_ok = (funct3 <= 3'b010); writes = 1'b1; wb_sel = `WB_FPU;
-                        uses_frs1 = 1'b1; uses_frs2 = 1'b1;
-                        fp_op = (funct3[1:0] == 2'b00) ? `FOP_LE : (funct3[1:0] == 2'b01) ? `FOP_LT : `FOP_EQ;
-                    end
-                    5'b11000: begin // FCVT.W, FCVT.WU
-                        fop_ok = (rs2[4:1] == 4'd0); writes = 1'b1; wb_sel = `WB_FPU; rm_used = 1'b1;
-                        uses_frs1 = 1'b1;
-                        fp_op = rs2[0] ? `FOP_F2IU : `FOP_F2I;
-                    end
-                    5'b11010: begin // FCVT.fmt.W, FCVT.fmt.WU
-                        fop_ok = (rs2[4:1] == 4'd0); fwrites = 1'b1; rm_used = 1'b1; uses_rs1 = 1'b1;
-                        fp_op = rs2[0] ? `FOP_IU2F : `FOP_I2F;
-                    end
-                    5'b11100: begin // FMV.X.W (no FMV.X.D on RV32), FCLASS
-                        fop_ok = (rs2 == 5'd0) && ((funct3 == 3'b000 && !insn[25]) || funct3 == 3'b001);
-                        writes = 1'b1; wb_sel = `WB_FPU; uses_frs1 = 1'b1;
-                        fp_op = funct3[0] ? `FOP_CLASS : `FOP_MVXW;
-                    end
-                    5'b11110: begin // FMV.W.X
-                        fop_ok = (rs2 == 5'd0) && (funct3 == 3'b000) && !insn[25];
-                        fwrites = 1'b1; uses_rs1 = 1'b1;
-                        fp_op = `FOP_MVWX;
-                    end
-                    default: fop_ok = 1'b0;
-                endcase
-                legal = FPU && fmt_ok && fop_ok && (!rm_used || rm_ok);
-            end
             default: legal = 1'b0;
         endcase
+
+        // F and D: decoded by fp_decoder (below), which exists only when FPU = 1
+        if (FPU && fp_hit) begin
+            legal = fp_legal;
+            is_fp = 1'b1;
+            fp_unit = fp_unit_i;
+            fwrites = fp_fwrites;
+            uses_frs1 = fp_frs1;
+            uses_frs2 = fp_frs2;
+            uses_frs3 = fp_frs3;
+            rm_used = fp_rm_used;
+            is_load = fp_load;
+            is_store = fp_store;
+            uses_rs1 = fp_xrs1;
+            writes = fp_xwrites;
+            if (fp_store) imm = imm_s;
+            if (fp_load) wb_sel = `WB_MEM;
+            if (fp_xwrites) wb_sel = `WB_FPU;
+        end
 
         if (insn[1:0] != 2'b11)
             legal = 1'b0;

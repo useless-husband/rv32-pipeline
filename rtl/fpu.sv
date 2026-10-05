@@ -215,7 +215,8 @@ module fpu (
     logic        rnd_s;
     logic signed [12:0] rnd_e;
     logic [54:0] rnd_m;
-    logic        rnd_st;
+    logic        rnd_st, rnd_below, pre_below;
+    logic [5:0]  rnd_sh, pre_sh;
 
     logic        ds_start, ds_done, ds_sticky, fma_neg, fma_zero, fma_sticky;
     logic signed [12:0] ds_exp, fma_exp;
@@ -273,6 +274,8 @@ module fpu (
                     rnd_e <= fma_exp;
                     rnd_m <= fma_mant;
                     rnd_st <= fma_sticky;
+                    rnd_below <= pre_below;
+                    rnd_sh <= pre_sh;
                     state <= S_ROUND;
                 end
                 S_DS: if (ds_done) begin
@@ -280,6 +283,8 @@ module fpu (
                     rnd_e <= ds_exp;
                     rnd_m <= ds_mant;
                     rnd_st <= ds_sticky;
+                    rnd_below <= pre_below;
+                    rnd_sh <= pre_sh;
                     state <= S_ROUND;
                 end
                 default: if (ack) state <= S_IDLE;   // S_ROUND, S_F2I, S_SPEC: wait to be read
@@ -303,8 +308,12 @@ module fpu (
     logic [4:0]  rnd_flags, f2i_flags;
     logic [31:0] f2i_result;
 
+    // the subnormal shift distance is worked out as the rounder's inputs are registered
+    fp_denorm u_pre (.dbl(dbl_q), .exp((state == S_DS) ? ds_exp : fma_exp), .below(pre_below), .sh(pre_sh));
+
     fp_round u_round (
         .dbl(dbl_q), .rm(rm_q), .sign(rnd_s), .exp(rnd_e), .mant(rnd_m), .sticky(rnd_st),
+        .below(rnd_below), .sh(rnd_sh),
         .result(rnd_result), .flags(rnd_flags));
 
     fp_f2i u_f2i (

@@ -21,8 +21,8 @@
 //   2. carry-save reduction of the five terms, then one wide addition
 //      (carry-select, in two halves); a negative difference is taken back
 //      to a magnitude without a second carry chain
-//   3. count leading zeros and shift left (combinational here, registered
-//      by fpu.sv)
+//   3. find the leading one and shift it to the top (combinational here,
+//      registered by fpu.sv)
 module fp_fma (
     input  logic         clk,
     input  logic         en_mul,
@@ -114,21 +114,33 @@ module fp_fma (
     end
 
     // ------------------------------------------------------------- step 3
-    // normalise: binary search for the leading one, shifting as it goes
-    logic [163:0] n;
+    // Normalise: find the leading one and shift it to the top, two bits of the
+    // shift distance per level (0/64/128, then 0/16/32/48, 0/4/8/12, 0/1/2/3).
+    // Each level looks at chunks of what the level above produced, so the
+    // zero tests of a level run side by side.
+    logic [163:0] na, nb, nc, n;
     logic [7:0]   lz;
 
     always_comb begin
-        n = sum;
-        lz = 8'd0;
-        if (n[163:36] == 128'd0) begin lz[7] = 1'b1; n = {n[35:0], 128'd0}; end
-        if (n[163:100] == 64'd0) begin lz[6] = 1'b1; n = {n[99:0], 64'd0}; end
-        if (n[163:132] == 32'd0) begin lz[5] = 1'b1; n = {n[131:0], 32'd0}; end
-        if (n[163:148] == 16'd0) begin lz[4] = 1'b1; n = {n[147:0], 16'd0}; end
-        if (n[163:156] == 8'd0)  begin lz[3] = 1'b1; n = {n[155:0], 8'd0}; end
-        if (n[163:160] == 4'd0)  begin lz[2] = 1'b1; n = {n[159:0], 4'd0}; end
-        if (n[163:162] == 2'd0)  begin lz[1] = 1'b1; n = {n[161:0], 2'd0}; end
-        if (!n[163])             begin lz[0] = 1'b1; n = {n[162:0], 1'b0}; end
+        // level 1: 64-bit chunks
+        if (sum[163:100] != 64'd0)      begin lz[7:6] = 2'd0; na = sum; end
+        else if (sum[99:36] != 64'd0)   begin lz[7:6] = 2'd1; na = {sum[99:0], 64'd0}; end
+        else                            begin lz[7:6] = 2'd2; na = {sum[35:0], 128'd0}; end
+        // level 2: 16-bit chunks of the top 64 bits
+        if (na[163:148] != 16'd0)       begin lz[5:4] = 2'd0; nb = na; end
+        else if (na[147:132] != 16'd0)  begin lz[5:4] = 2'd1; nb = {na[147:0], 16'd0}; end
+        else if (na[131:116] != 16'd0)  begin lz[5:4] = 2'd2; nb = {na[131:0], 32'd0}; end
+        else                            begin lz[5:4] = 2'd3; nb = {na[115:0], 48'd0}; end
+        // level 3: 4-bit chunks of the top 16 bits
+        if (nb[163:160] != 4'd0)        begin lz[3:2] = 2'd0; nc = nb; end
+        else if (nb[159:156] != 4'd0)   begin lz[3:2] = 2'd1; nc = {nb[159:0], 4'd0}; end
+        else if (nb[155:152] != 4'd0)   begin lz[3:2] = 2'd2; nc = {nb[155:0], 8'd0}; end
+        else                            begin lz[3:2] = 2'd3; nc = {nb[151:0], 12'd0}; end
+        // level 4: the top 4 bits
+        if (nc[163])                    begin lz[1:0] = 2'd0; n = nc; end
+        else if (nc[162])               begin lz[1:0] = 2'd1; n = {nc[162:0], 1'd0}; end
+        else if (nc[161])               begin lz[1:0] = 2'd2; n = {nc[161:0], 2'd0}; end
+        else                            begin lz[1:0] = 2'd3; n = {nc[160:0], 3'd0}; end
     end
 
     assign mant = n[163:109];

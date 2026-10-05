@@ -80,12 +80,8 @@ module csr_file #(
         exists = 1'b1;
         rdata = 32'd0;
         case (addr)
-            12'h001, 12'h002, 12'h003: begin              // fflags, frm, fcsr
-                exists = FPU && !fs_off;
-                rdata = {24'd0, addr[1] ? frm : 3'd0, addr[0] ? fflags : 5'd0};
-                if (addr[1:0] == 2'b10) rdata = {29'd0, frm};
-            end
-            12'h300: rdata = {fs == 2'b11, 16'd0, fs, 2'b11, 3'd0, mpie_bit, 3'd0, mie_bit, 3'd0};
+            12'h300: rdata = FPU ? {fs == 2'b11, 16'd0, fs, 2'b11, 3'd0, mpie_bit, 3'd0, mie_bit, 3'd0}
+                                 : {19'd0, 2'b11, 3'd0, mpie_bit, 3'd0, mie_bit, 3'd0};
             12'h301: rdata = FPU ? 32'h4000_1128 : 32'h4000_1100;   // MXL=32, I, M (, F, D)
             12'h304, 12'h344: rdata = 32'd0;              // mie, mip
             12'h305: rdata = mtvec;
@@ -99,6 +95,11 @@ module csr_file #(
                 rdata = hi ? ctr[63:32] : ctr[31:0];
             end
         endcase
+        if (FPU && is_fcsr) begin                         // fflags, frm, fcsr: only while FS is on
+            exists = !fs_off;
+            rdata = {24'd0, addr[1] ? frm : 3'd0, addr[0] ? fflags : 5'd0};
+            if (addr[1:0] == 2'b10) rdata = {29'd0, frm};
+        end
         illegal = !exists || (writes && addr[11:10] == 2'b11);
 
         case (op)
@@ -147,25 +148,35 @@ module csr_file #(
     assign is_fcsr = (addr == 12'h001) || (addr == 12'h002) || (addr == 12'h003);
     assign fs_off = (fs == 2'b00);
 
-    always_ff @(posedge clk) begin
-        if (rst || !FPU) begin
-            fs <= 2'b00;
-            frm <= 3'd0;
-            fflags <= 5'd0;
-        end else begin
-            if (do_write && addr == 12'h300) fs <= wval[14:13];
-            if (do_write && is_fcsr) begin
-                if (addr[0]) fflags <= wval[4:0];
-                if (addr[1]) frm <= addr[0] ? wval[7:5] : wval[2:0];
-                fs <= 2'b11;
+    generate
+        if (FPU) begin : g_fcsr
+            always_ff @(posedge clk) begin
+                if (rst) begin
+                    fs <= 2'b00;
+                    frm <= 3'd0;
+                    fflags <= 5'd0;
+                end else begin
+                    if (do_write && addr == 12'h300) fs <= wval[14:13];
+                    if (do_write && is_fcsr) begin
+                        if (addr[0]) fflags <= wval[4:0];
+                        if (addr[1]) frm <= addr[0] ? wval[7:5] : wval[2:0];
+                        fs <= 2'b11;
+                    end
+                    if (fp_flags_we) begin
+                        fflags <= fflags | fp_flags;
+                        if (fp_flags != 5'd0) fs <= 2'b11;
+                    end
+                    if (fp_dirty) fs <= 2'b11;
+                end
             end
-            if (fp_flags_we) begin
-                fflags <= fflags | fp_flags;
-                if (fp_flags != 5'd0) fs <= 2'b11;
-            end
-            if (fp_dirty) fs <= 2'b11;
+        end else begin : g_no_fcsr
+            assign fs = 2'b00;
+            assign frm = 3'd0;
+            assign fflags = 5'd0;
+            logic unused_fp;
+            assign unused_fp = &{1'b0, is_fcsr, fp_flags, fp_flags_we, fp_dirty};
         end
-    end
+    endgenerate
 
     // Counters.  A CSR write replaces that cycle's increment.
     logic wr_ctr;

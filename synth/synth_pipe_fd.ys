@@ -1,0 +1,6 @@
+# Yosys synthesis of core B with the FPU (RV32IMFD) for the Spartan-7 XC7S50.
+# Run from the repository root:  make synth
+read_verilog -defer -sv -Irtl rtl/decoder.sv rtl/fp_decoder.sv rtl/alu.sv rtl/regfile.sv rtl/lsu_align.sv rtl/csr_file.sv rtl/bpred.sv rtl/divider.sv rtl/mem_arbiter.sv rtl/icache.sv rtl/dcache.sv rtl/fp_unpack.sv rtl/fp_roundup.sv rtl/fp_denorm.sv rtl/fp_round.sv rtl/fp_f2i.sv rtl/fp_misc.sv rtl/fp_ds_step.sv rtl/fp_divsqrt.sv rtl/fp_fma.sv rtl/fpu.sv rtl/fp_regfile.sv rtl/core_pipe.sv synth/top_pipe.sv synth/top_pipe_fd.sv
+synth_xilinx -family xc7 -top top_pipe_fd
+tee -q -o build/synth/pipe_fd/stat.txt stat -tech xilinx
+tee -q -o build/synth/pipe_fd/utilization.json stat -json

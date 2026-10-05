@@ -1,0 +1,8 @@
+# Logic-only static timing estimate for core B with the FPU (make sta).  Not
+# timing sign-off: cell delays from Yosys' 7-series models, no placement or
+# routing delay, distributed RAM replaced by flip-flops so every path has
+# timing arcs.
+read_verilog -defer -sv -Irtl rtl/decoder.sv rtl/fp_decoder.sv rtl/alu.sv rtl/regfile.sv rtl/lsu_align.sv rtl/csr_file.sv rtl/bpred.sv rtl/divider.sv rtl/mem_arbiter.sv rtl/icache.sv rtl/dcache.sv rtl/fp_unpack.sv rtl/fp_roundup.sv rtl/fp_denorm.sv rtl/fp_round.sv rtl/fp_f2i.sv rtl/fp_misc.sv rtl/fp_ds_step.sv rtl/fp_divsqrt.sv rtl/fp_fma.sv rtl/fpu.sv rtl/fp_regfile.sv rtl/core_pipe.sv synth/top_pipe.sv synth/top_pipe_fd.sv
+synth_xilinx -family xc7 -top top_pipe_fd -flatten -nolutram
+read_verilog -lib -specify +/xilinx/cells_sim.v
+tee -q -o build/synth/pipe_fd/sta.txt sta

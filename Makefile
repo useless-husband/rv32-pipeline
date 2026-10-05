@@ -151,9 +151,9 @@ VROOT := $(shell $(VERILATOR) --getenv VERILATOR_ROOT 2>/dev/null)
 VDEFS := -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TIMING=0 -DVM_TRACE=0 -DVM_TRACE_FST=0 -DVM_TRACE_VCD=0 \
          -DVM_TRACE_SAIF=0
 VFLAGS := --cc -O3 --x-assign fast --x-initial fast --noassert -Irtl --prefix Vtop -Wno-fatal
-FPU_RTL := rtl/fp_unpack.sv rtl/fp_roundup.sv rtl/fp_round.sv rtl/fp_f2i.sv rtl/fp_misc.sv rtl/fp_ds_step.sv \
+FPU_RTL := rtl/fp_unpack.sv rtl/fp_roundup.sv rtl/fp_denorm.sv rtl/fp_round.sv rtl/fp_f2i.sv rtl/fp_misc.sv rtl/fp_ds_step.sv \
            rtl/fp_divsqrt.sv rtl/fp_fma.sv rtl/fpu.sv
-RTL_COMMON := rtl/decoder.sv rtl/alu.sv rtl/regfile.sv rtl/lsu_align.sv rtl/csr_file.sv
+RTL_COMMON := rtl/decoder.sv rtl/fp_decoder.sv rtl/alu.sv rtl/regfile.sv rtl/lsu_align.sv rtl/csr_file.sv
 RTL_SINGLE := $(RTL_COMMON) rtl/muldiv_comb.sv rtl/core_single.sv
 SIM_SINGLE := $(RTL_SINGLE) rtl/sim/sim_top_single.sv
 VSIM_CXX = $(CXX) -std=c++17 -O2 -w $(VDEFS) -Imodel -Isim -Ibuild/$(1) -I$(VROOT)/include \

@@ -246,22 +246,9 @@ module core_pipe #(
             e_illegal <= dc_illegal;
             e_rs1_val <= rf_rd1;
             e_rs2_val <= rf_rd2;
-            e_rs3 <= dc_rs3;
-            e_frd_we <= dc_frd_we;
-            e_is_fp <= dc_is_fp;
-            e_fp_unit <= dc_fp_unit;
-            e_fp_op <= dc_fp_op;
-            e_fp_dbl <= dc_fp_dbl;
-            e_fp_rm_dyn <= dc_fp_rm_dyn;
-            e_frs1_val <= frf_rd1;
-            e_frs2_val <= frf_rd2;
-            e_frs3_val <= frf_rd3;
         end else begin
             // Held in EX: keep the forwarded operands.  The MEM/WB instructions
             // that supply them move on while EX waits.
-            e_frs1_val <= ffwd1;
-            e_frs2_val <= ffwd2;
-            e_frs3_val <= ffwd3;
             e_rs1_val <= fwd1;
             e_rs2_val <= fwd2;
         end
@@ -281,9 +268,47 @@ module core_pipe #(
         else fwd2 = e_rs2_val;
     end
 
-    // the same two sources for the three floating-point operands
+    // F/D part of the ID/EX register, and the same two forwarding sources
+    // for the three floating-point operands
     logic        m_frd_we;
     logic [63:0] m_fresult;
+
+    generate
+        if (FPU) begin : g_fp_ex
+            always_ff @(posedge clk) begin
+                if (!e_hold) begin
+                    e_rs3 <= dc_rs3;
+                    e_frd_we <= dc_frd_we;
+                    e_is_fp <= dc_is_fp;
+                    e_fp_unit <= dc_fp_unit;
+                    e_fp_op <= dc_fp_op;
+                    e_fp_dbl <= dc_fp_dbl;
+                    e_fp_rm_dyn <= dc_fp_rm_dyn;
+                    e_frs1_val <= frf_rd1;
+                    e_frs2_val <= frf_rd2;
+                    e_frs3_val <= frf_rd3;
+                end else begin
+                    e_frs1_val <= ffwd1;
+                    e_frs2_val <= ffwd2;
+                    e_frs3_val <= ffwd3;
+                end
+            end
+        end else begin : g_no_fp_ex
+            assign e_rs3 = 5'd0;
+            assign e_frd_we = 1'b0;
+            assign e_is_fp = 1'b0;
+            assign e_fp_unit = 1'b0;
+            assign e_fp_op = 5'd0;
+            assign e_fp_dbl = 1'b0;
+            assign e_fp_rm_dyn = 1'b0;
+            assign e_frs1_val = 64'd0;
+            assign e_frs2_val = 64'd0;
+            assign e_frs3_val = 64'd0;
+            logic unused_fp_id;
+            assign unused_fp_id = &{1'b0, dc_rs3, dc_frd_we, dc_is_fp, dc_fp_unit, dc_fp_op, dc_fp_dbl,
+                                    dc_fp_rm_dyn, frf_rd1, frf_rd2, frf_rd3};
+        end
+    endgenerate
 
     always_comb begin
         if (m_valid && m_frd_we && !m_is_load && m_rd == e_rs1) ffwd1 = m_fresult;
@@ -323,13 +348,12 @@ module core_pipe #(
 
     logic signed [32:0] mul_a, mul_b;
     logic signed [65:0] mul_p;
-    logic [31:0] mdu_y, div_y;
+    logic [31:0] div_y;
     logic        div_done;
 
     assign mul_a = {(e_funct3[1:0] != 2'b11) & fwd1[31], fwd1};
     assign mul_b = {(e_funct3[1:0] == 2'b01 || e_funct3[1:0] == 2'b00) & fwd2[31], fwd2};
     assign mul_p = mul_a * mul_b;
-    assign mdu_y = e_is_div ? div_y : (e_funct3[1:0] == 2'b00) ? mul_p[31:0] : mul_p[63:32];
 
     divider u_div (
         .clk(clk), .rst(rst), .start(e_valid && e_is_div && !redirect_mem), .kill(redirect_mem),
@@ -422,15 +446,24 @@ module core_pipe #(
         else actual_next = e_pc4;
     end
 
+    // Result mux.  The multiplier's product is the last signal to arrive in EX,
+    // so it is selected last: everything else is chosen first (e_res_early) and
+    // the product needs only one more 2:1 choice.
+    logic [31:0] e_res_early;
+    logic        e_is_mul;
+
     always_comb begin
         case (e_wb_sel)
-            `WB_PC4: e_result = e_pc4;
-            `WB_CSR: e_result = csr_rdata;
-            `WB_MDU: e_result = mdu_y;
-            `WB_FPU: e_result = fpu_iresult;
-            default: e_result = alu_y;   // loads: the address
+            `WB_PC4: e_res_early = e_pc4;
+            `WB_CSR: e_res_early = csr_rdata;
+            `WB_MDU: e_res_early = div_y;
+            `WB_FPU: e_res_early = FPU ? fpu_iresult : alu_y;   // never selected without the FPU
+            default: e_res_early = alu_y;   // loads: the address
         endcase
     end
+
+    assign e_is_mul = (e_wb_sel == `WB_MDU) && !e_is_div;
+    assign e_result = !e_is_mul ? e_res_early : (e_funct3[1:0] == 2'b00) ? mul_p[31:0] : mul_p[63:32];
 
     assign e_hold = m_stall || e_busy;
     assign e_fire = e_valid && !e_hold && !redirect_mem;
@@ -452,14 +485,7 @@ module core_pipe #(
     always_ff @(posedge clk) begin
         if (rst) begin
             m_valid <= 1'b0;
-            m_beat <= 1'b0;
         end else if (!m_stall) begin
-            m_beat <= 1'b0;
-            m_frd_we <= e_frd_we && !e_exc;
-            m_fresult <= fpu_result;
-            m_fflags <= (e_fp_unit && !e_exc) ? fpu_flags : 5'd0;
-            m_mem_dbl <= e_is_fp && e_fp_dbl && (e_is_load || e_is_store) && !e_exc;
-            m_wdata_hi <= ffwd2[63:32];
             m_valid <= e_fire;
             m_pc <= e_pc;
             m_insn <= e_insn;
@@ -478,13 +504,40 @@ module core_pipe #(
             m_wdata <= st_wdata;
             m_wmask <= st_wmask;
         end else if (beat_adv) begin
-            m_beat <= 1'b1;
             m_addr <= m_addr4;
             m_wdata <= m_wdata_hi;
-            m_wdata_hi <= m_wdata;
-            m_lo <= dc_rdata;
         end
     end
+
+    // F/D part of the EX/MEM register
+    generate
+        if (FPU) begin : g_fp_mem
+            always_ff @(posedge clk) begin
+                if (rst) begin
+                    m_beat <= 1'b0;
+                end else if (!m_stall) begin
+                    m_beat <= 1'b0;
+                    m_frd_we <= e_frd_we && !e_exc;
+                    m_fresult <= fpu_result;
+                    m_fflags <= (e_fp_unit && !e_exc) ? fpu_flags : 5'd0;
+                    m_mem_dbl <= e_is_fp && e_fp_dbl && (e_is_load || e_is_store) && !e_exc;
+                    m_wdata_hi <= ffwd2[63:32];
+                end else if (beat_adv) begin
+                    m_beat <= 1'b1;
+                    m_wdata_hi <= m_wdata;
+                    m_lo <= dc_rdata;
+                end
+            end
+        end else begin : g_no_fp_mem
+            assign m_beat = 1'b0;
+            assign m_frd_we = 1'b0;
+            assign m_fresult = 64'd0;
+            assign m_fflags = 5'd0;
+            assign m_mem_dbl = 1'b0;
+            assign m_wdata_hi = 32'd0;
+            assign m_lo = 32'd0;
+        end
+    endgenerate
 
     // FENCE.I: write back the D-cache, then invalidate the I-cache, then
     // refetch the next instruction (redirect from MEM).
@@ -535,13 +588,6 @@ module core_pipe #(
         if (rst) begin
             w_valid <= 1'b0;
         end else begin
-            w_frd_we <= m_frd_we;
-            if (!m_is_load) w_fresult <= m_fresult;
-            else if (m_mem_dbl) w_fresult <= {ld_data, m_lo};
-            else w_fresult <= {32'hffff_ffff, ld_data};       // FLW: NaN-boxed
-            w_fflags <= m_fflags;
-            w_mem_dbl <= m_mem_dbl && m_is_store;
-            w_mem_wdata_hi <= m_wdata;
             w_valid <= m_fire;
             w_pc <= m_pc;
             w_insn <= m_insn;
@@ -558,6 +604,27 @@ module core_pipe #(
             w_mem_wmask <= m_wmask;
         end
     end
+
+    // F/D part of the MEM/WB register
+    generate
+        if (FPU) begin : g_fp_wb
+            always_ff @(posedge clk) begin
+                w_frd_we <= m_frd_we;
+                if (!m_is_load) w_fresult <= m_fresult;
+                else if (m_mem_dbl) w_fresult <= {ld_data, m_lo};
+                else w_fresult <= {32'hffff_ffff, ld_data};       // FLW: NaN-boxed
+                w_fflags <= m_fflags;
+                w_mem_dbl <= m_mem_dbl && m_is_store;
+                w_mem_wdata_hi <= m_wdata;
+            end
+        end else begin : g_no_fp_wb
+            assign w_frd_we = 1'b0;
+            assign w_fresult = 64'd0;
+            assign w_fflags = 5'd0;
+            assign w_mem_dbl = 1'b0;
+            assign w_mem_wdata_hi = 32'd0;
+        end
+    endgenerate
 
     assign commit_valid = w_valid;
     assign commit_pc = w_pc;
@@ -653,5 +720,5 @@ module core_pipe #(
     logic unused;
     assign unused = &{1'b0, d_pred_taken, dc_is_mdu, dc_is_jal, ld_data_unused, unused_wdata,
                       unused_wmask, unused_mis, e_is_mdu, mul_p[65:64], w_cause[31:0], m_addr_first[1:0],
-                      e_fp_op, e_fp_rm, e_fp_dbl};
+                      e_fp_op, e_fp_rm, e_fp_dbl, ffwd1, ffwd2, ffwd3, fpu_result, m_lo, m_fflags};
 endmodule
