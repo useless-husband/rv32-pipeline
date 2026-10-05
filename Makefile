@@ -228,7 +228,7 @@ check-python:
 unit: check-python
 	$(PYTHON) -m pytest -q tests/unit
 
-SIMS := build/vsim_single build/vsim_pipe
+SIMS := build/vsim_single build/vsim_pipe build/vsim_pipe_fd
 PYENV := CLANG="$(CLANG)" LLD="$(LLD)"
 
 system: check-python $(SIMS) rvtests sw benchmarks
@@ -236,17 +236,19 @@ system: check-python $(SIMS) rvtests sw benchmarks
 	$(PYENV) $(PYTHON) -m pytest -q tests/system
 
 # one random program on one core, e.g. make random-one SEED=17 CORE=pipe
+# (with F and D instructions: make random-one SEED=17 CORE=pipe_fd FP=1)
 SEED ?= 1
 CORE ?= pipe
 LENGTH ?= 3000
+FP ?=
 random-one: build/vsim_$(CORE)
 	@mkdir -p build/random
-	$(PYTHON) tests/random/rvgen.py --seed $(SEED) --length $(LENGTH) -o build/random/one.S
-	$(CLANG) $(RVARCH) -Imodel -c -o build/random/one.o build/random/one.S
+	$(PYTHON) tests/random/rvgen.py --seed $(SEED) --length $(LENGTH) $(if $(FP),--fp) -o build/random/one.S
+	$(CLANG) $(RVARCH) $(if $(FP),-march=rv32imfd_zicsr_zifencei) -Imodel -c -o build/random/one.o build/random/one.S
 	$(LLD) -T sw/runtime/link.ld -o build/random/one.elf build/random/one.o
 	./build/vsim_$(CORE) --quiet --stats --trace build/random/one.trace build/random/one.elf
 
-# longer soak: 1000 random programs on each core (about 2 minutes)
+# longer soak: 1000 integer programs on each core and 1000 F/D programs on the FPU core
 random-soak: check-python $(SIMS)
 	RANDOM_SEEDS=1000 $(PYENV) $(PYTHON) -m pytest -q tests/system/test_random.py
 
