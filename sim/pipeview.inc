@@ -4,7 +4,7 @@
 // turns that into the HTML viewer.
 //
 // dbg_why bits: 0 I-cache miss (IF has no instruction), 1 load-use or CSR
-// drain hazard in ID, 2 divider busy in EX, 3 MEM stalled (D-cache or
+// drain hazard in ID, 2 divider or FPU busy in EX, 3 MEM stalled (D-cache or
 // FENCE.I), 4 redirect from EX, 5 redirect from MEM.
 #include <cstdio>
 #include <string>

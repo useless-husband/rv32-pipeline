@@ -15,7 +15,7 @@ import argparse
 import html
 import json
 
-WHY = ["I-cache miss", "ID hazard (load-use or CSR drain)", "divider busy", "MEM stall (D-cache or FENCE.I)",
+WHY = ["I-cache miss", "ID hazard (load-use or CSR drain)", "divider or FPU busy", "MEM stall (D-cache or FENCE.I)",
        "redirect from EX", "redirect from MEM"]
 
 

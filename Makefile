@@ -64,7 +64,7 @@ build/sw/%.elf: sw/demo/%.c $(RT_OBJ) sw/runtime/link.ld
 	$(CLANG) $(RVCFLAGS) -c -o build/sw/$*.o $<
 	$(LLD) $(RVLDFLAGS) -o $@ $(RT_OBJ) build/sw/$*.o
 
-sw: build/sw/hello.elf build/sw/demo.elf
+sw: build/sw/hello.elf build/sw/demo.elf build/sw/fpdemo.elf
 
 # the same runtime for programs that use the FPU (hardware double ABI)
 RT_OBJ_FD := build/sw_fd/crt0.o build/sw_fd/rt.o
@@ -328,6 +328,15 @@ build/crt/%.o: $(TP)/llvm/.stamp
 	@mkdir -p build/crt
 	$(CLANG) $(RVARCH) -O2 -ffreestanding -nostdlib -fno-pic -w -I$(CRT_DIR) -c -o $@ $(CRT_DIR)/$*.c
 
+# a small floating-point demonstration for the core with the FPU
+build/sw/fpdemo.elf: sw/demo/fpdemo.c $(RT_OBJ_FD) sw/runtime/link.ld
+	$(CLANG) $(RVCFLAGS_FD) -fno-math-errno -c -o build/sw_fd/fpdemo.o sw/demo/fpdemo.c
+	$(LLD) $(RVLDFLAGS) -o $@ $(RT_OBJ_FD) build/sw_fd/fpdemo.o
+
+.PHONY: fpdemo
+fpdemo: build/vsim_pipe_fd build/sw/fpdemo.elf
+	./build/vsim_pipe_fd --stats build/sw/fpdemo.elf
+
 FPB_SRC := sw/bench/fpbench/fpbench.c
 build/sw/fpbench-soft.elf: $(FPB_SRC) $(RT_OBJ) $(CRT_OBJ) sw/runtime/link.ld
 	$(CLANG) $(RVCFLAGS) -ffp-contract=off -c -o build/sw/fpbench-soft.o $(FPB_SRC)
@@ -369,9 +378,11 @@ bench: $(SIMS) $(addprefix build/vsim_pipe-,$(VARIANTS)) build/sw/coremark-bench
 PV_PROG ?= build/sw/demo.elf
 PV_FROM ?= 382600
 PV_CYCLES ?= 200
+# the FPU core works too:  make pipeview PV_SIM=build/vsim_pipe_fd PV_PROG=build/sw/fpdemo.elf PV_FROM=20000
+PV_SIM ?= build/vsim_pipe
 .PHONY: pipeview
-pipeview: build/vsim_pipe $(PV_PROG)
-	./build/vsim_pipe --quiet --pipeview build/pipeview.json --pv-from $(PV_FROM) --pv-cycles $(PV_CYCLES) $(PV_PROG)
+pipeview: $(PV_SIM) $(PV_PROG)
+	./$(PV_SIM) --quiet --pipeview build/pipeview.json --pv-from $(PV_FROM) --pv-cycles $(PV_CYCLES) $(PV_PROG)
 	python3 tools/pipeview.py build/pipeview.json -o build/pipeview.html \
 	  --title "$(notdir $(PV_PROG)), cycles $(PV_FROM)-$$(($(PV_FROM)+$(PV_CYCLES)-1)), pipelined core."
 	@echo "open build/pipeview.html in a browser"
