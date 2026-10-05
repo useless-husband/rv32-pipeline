@@ -379,17 +379,19 @@ pipeview: build/vsim_pipe $(PV_PROG)
 # ------------------------------------------------------------- synthesis
 .PHONY: synth sta
 synth:
-	mkdir -p build/synth/single build/synth/pipe
+	mkdir -p build/synth/single build/synth/pipe build/synth/pipe_fd
 	$(YOSYS) -q -l build/synth/single/yosys.log synth/synth_single.ys
 	$(YOSYS) -q -l build/synth/pipe/yosys.log synth/synth_pipe.ys
+	$(YOSYS) -q -l build/synth/pipe_fd/yosys.log synth/synth_pipe_fd.ys
 	python3 tools/synth_report.py --check > synth/report.md
 	@cat synth/report.md
 
 # logic-only timing estimate (needs Yosys' sta pass; the report says what it is not)
 sta:
-	mkdir -p build/synth/single build/synth/pipe
+	mkdir -p build/synth/single build/synth/pipe build/synth/pipe_fd
 	$(YOSYS) -q -l build/synth/single/sta.log synth/sta_single.ys
 	$(YOSYS) -q -l build/synth/pipe/sta.log synth/sta_pipe.ys
+	$(YOSYS) -q -l build/synth/pipe_fd/sta.log synth/sta_pipe_fd.ys
 	python3 tools/synth_report.py --timing > synth/timing.md
 	@cat synth/timing.md
 
