@@ -16,8 +16,9 @@ permissions:
 # as many jumps), which moves the predictor statistics test_perf.py bounds.
 # The RTL keeps to a conservative SystemVerilog subset (no packages,
 # interfaces, structs or casts to parameter widths) so these older versions
-# accept it.  Third-party sources (riscv-tests, CoreMark) are fetched by the
-# Makefile at pinned commits.
+# accept it.  Third-party sources (riscv-tests, CoreMark, Berkeley SoftFloat
+# and TestFloat, LLVM compiler-rt) are fetched by the Makefile at pinned
+# commits.
 
 jobs:
   lint-and-unit:
@@ -38,6 +39,26 @@ jobs:
         run: make lint
       - name: cocotb unit tests (Icarus)
         run: make unit PYTHON=python
+
+  fpu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Verilator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends verilator
+          verilator --version
+      - name: Golden model's IEEE 754 arithmetic against Berkeley TestFloat
+        run: make fp-model-test
+      - name: RTL FPU against TestFloat and against the model (Verilator)
+        run: make fpu-unit
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fpu-reports
+          path: |
+            build/fp-model-test.md
+            build/fpu-unit.md
 
   system:
     runs-on: ubuntu-latest
@@ -62,12 +83,14 @@ jobs:
       - run: python -m pip install -r requirements-dev.txt
       - name: riscv-tests on the golden model
         run: make iss-test
-      - name: riscv-tests, random programs and benchmarks on both cores, in lockstep
+      - name: riscv-tests, random programs and benchmarks on the three cores, in lockstep
         run: make system PYTHON=python
       - name: Mutation check (every mutant must be caught)
         run: make mutants PYTHON=python
       - name: Benchmarks (cycle counts from the simulated cores)
         run: make bench
+      - name: Floating-point benchmark (soft float against the FPU)
+        run: make fp-bench
       - name: Pipeline viewer page
         run: make pipeview
       - uses: actions/upload-artifact@v4
@@ -75,6 +98,7 @@ jobs:
           name: reports
           path: |
             build/bench.md
+            build/fp-bench.md
             build/mutants.md
             build/pipeview.html
 
@@ -87,5 +111,5 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends yosys
           yosys -V
-      - name: synth_xilinx for the XC7S50, both cores (fails if either does not fit)
+      - name: synth_xilinx for the XC7S50, both cores and core B with the FPU (fails if one does not fit)
         run: make synth

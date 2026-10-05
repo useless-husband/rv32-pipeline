@@ -80,8 +80,17 @@ Implemented, identically in both cores and in the golden model:
   Core A has no caches or predictor; its cache and misprediction counters
   stay zero.
 
-Not implemented: compressed instructions (C), atomics (A), floating point,
-interrupts (timer, software, external), user and supervisor modes, virtual
+* **F and D** (core B with `FPU = 1`, and the golden model with `has_fpu`;
+  section 10): all RV32F and RV32D instructions, 32 f registers of 64 bits
+  with NaN boxing, `fflags`, `frm`, `fcsr`, `mstatus.FS` and `SD`, and the F
+  and D bits of `misa`. With FS off (the reset state) every F/D instruction
+  and the three CSRs are illegal instructions; so is a reserved rounding
+  mode, static or in `frm`. FLD/FSD need a word-aligned address (other
+  addresses raise the misaligned load/store exception). Without the FPU all
+  of this is illegal, as before.
+
+Not implemented: compressed instructions (C), atomics (A), floating point on
+core A, half and quad precision, interrupts (timer, software, external), user and supervisor modes, virtual
 memory, PMP, the `time` CSR, `mcountinhibit`, `mhpmevent*`, hardware support
 for misaligned accesses (they trap; the riscv-tests environment emulates them
 in its trap handler, like OpenSBI does on real hardware), debug mode.
@@ -286,6 +295,8 @@ branches from 92.0 % to 94.9 %). The numbers are in report.md 7.3.
 
 ## 8. Hard problems, in short
 
+(The floating-point ones are in section 10.3.)
+
 | Problem | Resolution |
 |---|---|
 | Block RAM reads one cycle late | present `addr_next`; hit check in the following cycle (6.2) |
@@ -315,3 +326,92 @@ branches from 92.0 % to 94.9 %). The numbers are in report.md 7.3.
 * **Formal verification with riscv-formal**: stronger guarantees than
   simulation, but a separate project; the commit port was designed so an RVFI
   wrapper could be added.
+
+## 10. Floating point (`FPU = 1`)
+
+The long version, with the algorithms and the measurements, is
+[report.md section 12](report.md#12-floating-point-unit-f-and-d-extensions).
+This section is the map.
+
+### 10.1 Structure
+
+```
+ ID                      EX                               MEM            WB
+ decoder + fp_decoder    fpu.sv                           FLD/FSD:       f register
+ x registers             +- fp_unpack x3                  two word       write,
+ f registers (3 ports)   +- fp_misc     1 cycle           accesses       commit port
+        |                +- fp_f2i      2 cycles          (m_beat)       (f value, flags,
+        v                +- fp_fma      \                                second store word)
+ ID/EX: x and f          |   mul+align | add | normalise  > 5 cycles
+ operands                +- fp_divsqrt  18 / 32 cycles   /
+                         +- fp_denorm, fp_round (shared rounder)
+ forwarding MEM/WB -> EX for x operands and for three f operands
+```
+
+| File | Role |
+|---|---|
+| `rtl/fp_decoder.sv` | F/D instruction decode (instantiated by `decoder.sv` only when `FPU = 1`) |
+| `rtl/fp_regfile.sv` | 32 x 64-bit f registers, three read ports |
+| `rtl/fpu.sv` | sequencer, operand selection (everything becomes P x Q + R), special cases |
+| `rtl/fp_unpack.sv` | sign / exponent / 53-bit significand; NaN-boxing check |
+| `rtl/fp_fma.sv` | fused multiply-add datapath: partial products, alignment, carry-save + carry-select add, normaliser |
+| `rtl/fp_divsqrt.sv`, `fp_ds_step.sv` | divide and square root, two radix-2 steps per cycle |
+| `rtl/fp_round.sv`, `fp_denorm.sv`, `fp_roundup.sv` | subnormal shift, rounding, overflow/underflow/inexact, packing |
+| `rtl/fp_f2i.sv`, `fp_misc.sv` | float to integer; the one-cycle operations |
+| `model/rv_fp.c` | the golden model's arithmetic, integer-only C |
+| `tests/fp/` | TestFloat driver, model checker, RTL unit testbench |
+
+### 10.2 Rules the pipeline follows
+
+* An FP instruction waits in EX until the FPU is done (`e_busy`), like a
+  divide. The FPU latches its operands in its first cycle; FENCE.I's flush
+  kills it.
+* `fflags` accumulates, and `mstatus.FS` becomes dirty, when the instruction
+  leaves EX. That is safe because nothing behind EX can cancel an instruction
+  (all exceptions are detected in EX), and exact because CSR instructions run
+  alone (5.4).
+* `mstatus.FS` and a dynamic rounding mode are checked in EX, not in ID: the
+  CSR instruction that changes them may be one stage ahead.
+* The x and f registers are separate name spaces. Forwarding and the load-use
+  stall compare a register number only with a producer of the same kind
+  (`rd_we` against x operands, `frd_we` against f operands).
+* FLD/FSD are two word accesses in MEM. After the first, `m_addr` advances
+  by 4 and the D-cache is given that address as `addr_next`, so its
+  synchronous arrays are read for the second word exactly as for a new
+  instruction (6.2); each word is one D-cache access and can miss on its own.
+
+### 10.3 Hard problems
+
+| Problem | Resolution |
+|---|---|
+| A 53 x 53 multiply (10.0 ns) or a 165-bit add after a shift does not fit the 7.8 ns clock | multi-cycle FPU: partial products registered, carry-save reduction, carry-select add (report 12.4) |
+| A negative difference in the adder would need a second 165-bit carry chain to negate | compute P-A-1 and P-A together; the magnitude of a negative result is the complement of the first |
+| The rounder started with exponent arithmetic and was the longest path | subnormal shift distance computed one register early (`fp_denorm`) |
+| Tininess after rounding | the rounding decision is also taken on the significand before the subnormal shift |
+| 8-byte accesses through a 32-bit cache port, possibly across two lines | two beats; all memory exceptions are raised in EX, so nothing can fault between them |
+| FP results invisible to lockstep until read back | commit port carries the f register write and the flags each instruction raised |
+| `FPU = 0` must stay the RV32IM core | F/D decode in its own module, F/D registers in generate blocks; same cycle counts and flip-flop count as before |
+| Host floating point differs between machines | the model's arithmetic is integer-only and is itself checked against TestFloat |
+
+### 10.4 Alternatives rejected
+
+* **A pipelined FPU** with several operations in flight: up to five times the
+  throughput on dense FP code, but in-flight results need their own
+  forwarding, stall and flush rules. The multi-cycle unit reuses the divider's
+  handshake unchanged.
+* **Separate add and multiply datapaths** (a dual-path adder would be faster
+  than five cycles): a second alignment shifter, adder and normaliser, roughly
+  another thousand LUTs by the size of the existing ones (not built).
+* **Recoded operands inside the register file** (Berkeley HardFloat's 65-bit
+  format, which removes the subnormal special case from every unit): the f
+  registers would no longer hold the architectural bits, which complicates
+  FMV, FLD/FSD and the lockstep comparison. Subnormals are handled where they
+  arise instead (the normaliser, and a pre-normalisation loop in the divider).
+* **A 64-bit data path through the D-cache** for FLD/FSD: wider load
+  multiplexers and store bypass on every access, and a double that straddles
+  two lines needs two beats anyway.
+* **Radix-4 SRT division**: half the cycles of radix-2 with a quotient-digit
+  table; two radix-2 steps per cycle give the same cycle count with logic
+  that is easy to check.
+* **FP in core A**: a combinational double divider and fused multiply-add
+  would lengthen its already 56 ns path several times over.

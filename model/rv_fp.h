@@ -9,7 +9,7 @@
  * Functions OR the exception flags they raise into *fl.
  *
  * Checked against Berkeley TestFloat for every operation, format and
- * rounding mode (make fp-model-test; see docs/report.md section 9). */
+ * rounding mode (make fp-model-test; see docs/report.md section 12). */
 #ifndef RV_FP_H
 #define RV_FP_H
 

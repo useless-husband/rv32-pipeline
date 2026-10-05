@@ -261,7 +261,7 @@ random-one: build/vsim_$(CORE)
 random-soak: check-python $(SIMS)
 	RANDOM_SEEDS=1000 $(PYENV) $(PYTHON) -m pytest -q tests/system/test_random.py
 
-test: lint iss-test unit system
+test: lint iss-test fp-model-test fpu-unit unit system
 
 venv:
 	python3 -m venv $(VENV)
@@ -405,6 +405,15 @@ sta:
 	$(YOSYS) -q -l build/synth/pipe_fd/sta.log synth/sta_pipe_fd.ys
 	python3 tools/synth_report.py --timing > synth/timing.md
 	@cat synth/timing.md
+
+# what fits in one cycle: a 53 x 53 multiplier, a 53 x 17 one, a 165-bit adder
+.PHONY: sta-blocks
+sta-blocks:
+	mkdir -p build/synth/blocks
+	@for m in mul53x53 mul53x17 add165; do \
+	  $(YOSYS) -q -l build/synth/blocks/$$m.log synth/sta_blk_$$m.ys || exit 1; \
+	  echo "$$m: $$(sed -n "s/^Latest arrival time in .* is \([0-9]*\):/\1/p" build/synth/blocks/$$m.txt) ps"; \
+	done
 
 # ------------------------------------------------------ mutation checks
 # needs the riscv-tests and random programs from `make system`

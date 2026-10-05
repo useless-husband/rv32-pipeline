@@ -85,7 +85,7 @@ if make -s build/vsim_pipe_fd build/sw/fpdemo.elf; then
   if ./build/vsim_pipe_fd build/sw/fpdemo.elf; then
     echo
     echo "上面每一個數字都是 CPU 裡的浮點運算器算的，也都和黃金模型逐指令對過答案。"
-    echo "（0x 開頭的 16 位數是這個小數在記憶體裡真正的 64 個位元；說明在 docs/導讀.zh-TW.md 第 9 節。）"
+    echo "（0x 開頭的 16 位數是這個小數在記憶體裡真正的 64 個位元；說明在 docs/導讀.zh-TW.md 第 6 節。）"
   else
     echo "浮點示範沒有正常結束（結束代碼 $?）。"
   fi

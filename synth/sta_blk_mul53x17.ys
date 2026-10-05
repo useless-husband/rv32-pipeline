@@ -1,0 +1,5 @@
+# Logic-only delay of one building block (make sta-blocks); see synth/fp_blocks.sv.
+read_verilog -sv synth/fp_blocks.sv
+synth_xilinx -family xc7 -top blk_mul53x17 -flatten -nolutram
+read_verilog -lib -specify +/xilinx/cells_sim.v
+tee -q -o build/synth/blocks/mul53x17.txt sta
